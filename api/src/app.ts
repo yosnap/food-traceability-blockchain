@@ -1,0 +1,255 @@
+/**
+ * Servidor principal de la API Food Traceability
+ * Conecta aplicaciones web y móvil con Hyperledger Fabric
+ */
+
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import dotenv from 'dotenv';
+import { errorHandler } from './middleware/errorHandler.js';
+import { requestLogger } from './middleware/requestLogger.js';
+import { authMiddleware } from './middleware/authMiddleware.js';
+import { fabricService } from './services/FabricService.js';
+
+// Importar rutas
+import foodRoutes from './routes/foodRoutes.js';
+import userRoutes from './routes/userRoutes.js';
+import healthRoutes from './routes/healthRoutes.js';
+
+// Cargar variables de entorno
+dotenv.config();
+
+// Crear aplicación Express
+const app = express();
+const PORT = process.env.PORT || 3001;
+
+// ==========================================
+// CONFIGURACIÓN GLOBAL
+// ==========================================
+
+// Middleware de seguridad
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            styleSrc: ["'self'", "'unsafe-inline'"],
+            scriptSrc: ["'self'"],
+            connectSrc: ["'self'"],
+            imgSrc: ["'self'", "data:", "https:"],
+            fontSrc: ["'self'"],
+            objectSrc: ["'none'"],
+            mediaSrc: ["'self'"],
+            frameSrc: ["'none'"],
+        },
+    },
+    crossOriginEmbedderPolicy: false
+}));
+
+// CORS configurado para desarrollo y producción
+const corsOptions = {
+    origin: process.env.NODE_ENV === 'production' 
+        ? process.env.ALLOWED_ORIGINS?.split(',') || []
+        : ['http://localhost:3000', 'http://localhost:3002', 'http://localhost:19006'], // Next.js, otra app, Expo
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    maxAge: 86400 // 24 horas
+};
+
+app.use(cors(corsOptions));
+
+// Parsing de JSON y URL encoded
+app.use(express.json({ 
+    limit: '10mb',
+    verify: (req: any, res, buf) => {
+        req.rawBody = buf;
+    }
+}));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Logging de requests
+app.use(requestLogger);
+
+// Trust proxy (para deployment detrás de nginx/cloudflare)
+app.set('trust proxy', 1);
+
+// ==========================================
+// RUTAS PÚBLICAS (sin autenticación)
+// ==========================================
+
+// Test básico
+app.get('/test', (req, res) => {
+    res.json({
+        success: true,
+        message: 'Food Traceability API está funcionando',
+        timestamp: new Date().toISOString(),
+        version: '1.0.0'
+    });
+});
+
+// Health check y status
+app.use('/api/health', healthRoutes);
+
+// Información pública del sistema
+app.get('/api/info', (req, res) => {
+    res.json({
+        name: 'Food Traceability API',
+        version: '1.0.0',
+        description: 'API para trazabilidad de alimentos con Hyperledger Fabric',
+        environment: process.env.NODE_ENV || 'development',
+        timestamp: new Date().toISOString(),
+        blockchain: {
+            network: 'Hyperledger Fabric',
+            channel: process.env.CHANNEL_NAME || 'mychannel',
+            chaincode: process.env.CHAINCODE_NAME || 'foodtraceability'
+        }
+    });
+});
+
+// ==========================================
+// RUTAS PROTEGIDAS (con autenticación)
+// ==========================================
+
+// Aplicar middleware de autenticación a todas las rutas protegidas
+app.use('/api/auth', authMiddleware);
+
+// Rutas de usuarios (algunas públicas, otras protegidas)
+app.use('/api/users', userRoutes);
+
+// Rutas de productos (todas protegidas)
+app.use('/api/food', authMiddleware, foodRoutes);
+
+// ==========================================
+// MANEJO DE ERRORES
+// ==========================================
+
+// Ruta catch-all para 404
+app.use('*', (req, res) => {
+    res.status(404).json({
+        success: false,
+        message: `Ruta ${req.originalUrl} no encontrada`,
+        timestamp: new Date().toISOString()
+    });
+});
+
+// Middleware de manejo de errores
+app.use(errorHandler);
+
+// ==========================================
+// INICIALIZACIÓN DEL SERVIDOR
+// ==========================================
+
+/**
+ * Inicializa la conexión con Fabric y arranca el servidor
+ */
+async function startServer() {
+    try {
+        console.log('🚀 Iniciando Food Traceability API...');
+        
+        // Inicializar Fabric en background (no bloquear el servidor)
+        console.log('📡 Fabric se inicializará en segundo plano...');
+        
+        // Intentar conectar en background sin bloquear
+        setImmediate(async () => {
+            try {
+                console.log('🔧 Inicializando Fabric...');
+                await fabricService.initialize();
+                console.log('✅ Conexión con Fabric establecida');
+                
+                try {
+                    const pingResult = await fabricService.ping();
+                    console.log('✅ Chaincode funcionando:', pingResult);
+                } catch (chaincodeError: any) {
+                    console.log('⚠️  Chaincode no disponible:', chaincodeError.message);
+                }
+            } catch (fabricError: any) {
+                console.log('⚠️  Fabric no disponible:', fabricError.message);
+                console.log('🔧 API funcionando sin conexión a blockchain');
+            }
+        });
+        
+        // Iniciar servidor HTTP
+        const server = app.listen(PORT, () => {
+            console.log(`🌐 Servidor corriendo en puerto ${PORT}`);
+            console.log(`📋 Ambiente: ${process.env.NODE_ENV || 'development'}`);
+            console.log(`🔗 API disponible en: http://localhost:${PORT}/api`);
+            console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
+            console.log(`ℹ️  Info del sistema: http://localhost:${PORT}/api/info`);
+        });
+
+        // Configurar graceful shutdown
+        const gracefulShutdown = (signal: string) => {
+            console.log(`\n📤 Recibida señal ${signal}. Cerrando servidor...`);
+            
+            server.close(async () => {
+                console.log('🔌 Servidor HTTP cerrado');
+                
+                try {
+                    await fabricService.disconnect();
+                    console.log('📡 Conexión con Fabric cerrada');
+                } catch (error) {
+                    console.error('❌ Error al cerrar conexión con Fabric:', error);
+                }
+                
+                console.log('👋 Servidor cerrado correctamente');
+                process.exit(0);
+            });
+            
+            // Forzar cierre después de 30 segundos
+            setTimeout(() => {
+                console.error('⚠️  Forzando cierre del servidor...');
+                process.exit(1);
+            }, 30000);
+        };
+
+        // Listeners para señales de sistema
+        process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+        process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+        
+        // Manejo de errores no capturados
+        process.on('unhandledRejection', (reason, promise) => {
+            console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+            // No cerrar el proceso, solo loggear
+        });
+        
+        process.on('uncaughtException', (error) => {
+            console.error('❌ Uncaught Exception:', error);
+            gracefulShutdown('UNCAUGHT_EXCEPTION');
+        });
+
+    } catch (error) {
+        console.error('❌ Error al iniciar el servidor:', error);
+        process.exit(1);
+    }
+}
+
+// ==========================================
+// VARIABLES DE ENTORNO REQUERIDAS
+// ==========================================
+
+const requiredEnvVars = [
+    'FABRIC_NETWORK_PATH',
+    'FABRIC_WALLET_PATH', 
+    'FABRIC_USER_ID',
+    'CHANNEL_NAME',
+    'CHAINCODE_NAME'
+];
+
+// Verificar variables de entorno en producción
+if (process.env.NODE_ENV === 'production') {
+    const missingVars = requiredEnvVars.filter(varName => !process.env[varName]);
+    
+    if (missingVars.length > 0) {
+        console.error('❌ Variables de entorno faltantes:', missingVars);
+        console.error('💡 Crea un archivo .env con las variables requeridas');
+        process.exit(1);
+    }
+}
+
+// Iniciar servidor si este archivo se ejecuta directamente
+if (import.meta.url === `file://${process.argv[1]}`) {
+    startServer();
+}
+
+export default app;

@@ -1,0 +1,288 @@
+// Types for Food Traceability Frontend
+
+export enum UserRole {
+  PRODUCER = 'PRODUCER',
+  PROCESSOR = 'PROCESSOR',
+  DISTRIBUTOR = 'DISTRIBUTOR',
+  RETAILER = 'RETAILER',
+  CONSUMER = 'CONSUMER',
+  ADMIN = 'ADMIN'
+}
+
+export enum FoodCategory {
+  VEGETABLES = 'VEGETABLES',
+  FRUITS = 'FRUITS',
+  MEAT = 'MEAT',
+  DAIRY = 'DAIRY',
+  GRAINS = 'GRAINS',
+  SEAFOOD = 'SEAFOOD',
+  BEVERAGES = 'BEVERAGES',
+  PROCESSED = 'PROCESSED'
+}
+
+export enum FoodStatus {
+  FRESH = 'FRESH',
+  EXPIRING = 'EXPIRING',
+  EXPIRED = 'EXPIRED',
+  CONSUMED = 'CONSUMED',
+  TRANSFERRED = 'TRANSFERRED'
+}
+
+export enum TransferType {
+  SALE = 'SALE',
+  DISTRIBUTION = 'DISTRIBUTION',
+  PROCESSING = 'PROCESSING',
+  CONSUMPTION = 'CONSUMPTION'
+}
+
+export interface Location {
+  address: string;
+  city: string;
+  country: string;
+  coordinates?: {
+    lat: number;
+    lng: number;
+  };
+}
+
+export interface OriginInfo {
+  farm: string;
+  location: string;
+  coordinates?: {
+    lat: number;
+    lng: number;
+  };
+  certifications?: string[];
+}
+
+export interface StorageConditions {
+  temperature: string;
+  humidity?: string;
+  requirements?: string[];
+}
+
+export interface Transfer {
+  id: string;
+  from: string;
+  to: string;
+  timestamp: string;
+  transferType: TransferType;
+  location: Location;
+  quantity?: number;
+  price?: number;
+  conditions?: string;
+  notes?: string;
+}
+
+export interface FoodAsset {
+  id: string;
+  batchNumber: string;
+  name: string;
+  category: FoodCategory;
+  description?: string;
+  quantity: number;
+  productionDate: string;
+  expirationDate: string;
+  currentOwner: string;
+  currentOwnerRole: UserRole;
+  status: FoodStatus;
+  ownershipHistory: Transfer[];
+  origin: OriginInfo;
+  allergens: string[];
+  storageConditions: StorageConditions;
+  weight?: number;
+  volume?: number;
+  brand?: string;
+  nutritionalInfo?: Record<string, any>;
+  qualityScore?: number;
+  certifications?: string[];
+  images?: string[];
+  qrCode?: string;
+  createdAt: string;
+  updatedAt: string;
+  consumedDate?: string;
+  consumedBy?: string;
+  rating?: number;
+  consumerNotes?: string;
+}
+
+export interface User {
+  address: string;
+  name: string;
+  role: UserRole;
+  email?: string;
+  phone?: string;
+  location: Location;
+  licenseNumber?: string;
+  isActive: boolean;
+  isVerified: boolean;
+  profileImage?: string;
+  notificationSettings?: NotificationSettings;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NotificationSettings {
+  enableNotifications: boolean;
+  notificationDays: number;
+  enableEmailNotifications: boolean;
+  enablePushNotifications: boolean;
+  quietHours?: {
+    start: string;
+    end: string;
+  };
+  categorySettings?: Record<FoodCategory, {
+    enabled: boolean;
+    daysAhead: number;
+  }>;
+}
+
+export interface UserStats {
+  totalProducts: number;
+  activeProducts: number;
+  expiringProducts: number;
+  expiredProducts: number;
+  transfersCompleted: number;
+  totalValue?: number;
+  categories: Record<FoodCategory, number>;
+}
+
+// API Response Types
+export interface ApiResponse<T = any> {
+  success: boolean;
+  message?: string;
+  data?: T;
+  error?: string;
+  timestamp: string;
+}
+
+export interface PaginatedResponse<T> extends ApiResponse<T[]> {
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+// Form Types
+export interface CreateProductForm {
+  name: string;
+  category: FoodCategory;
+  description?: string;
+  quantity: number;
+  productionDate: string;
+  expirationDate: string;
+  batchNumber?: string;
+  origin: {
+    farm: string;
+    location: string;
+  };
+  storageConditions: {
+    temperature: string;
+    humidity?: string;
+    requirements?: string[];
+  };
+  allergens: string[];
+  weight?: number;
+  volume?: number;
+  brand?: string;
+}
+
+export interface TransferProductForm {
+  newOwner: string;
+  transferType: TransferType;
+  location: Location;
+  quantity: number;
+  price?: number;
+  conditions?: string;
+  notes?: string;
+}
+
+export interface ConsumeProductForm {
+  consumedDate: string;
+  rating: number;
+  notes?: string;
+}
+
+export interface RegisterUserForm {
+  address: string;
+  name: string;
+  role: UserRole;
+  email: string;
+  phone?: string;
+  location: Location;
+  licenseNumber?: string;
+}
+
+// UI State Types
+export interface LoadingState {
+  isLoading: boolean;
+  message?: string;
+}
+
+export interface ErrorState {
+  hasError: boolean;
+  message?: string;
+  code?: string;
+}
+
+// Dashboard Types
+export interface DashboardStats {
+  totalProducts: number;
+  expiringProducts: number;
+  recentTransfers: number;
+  totalValue?: number;
+}
+
+export interface ProductFilters {
+  category?: FoodCategory;
+  status?: FoodStatus;
+  search?: string;
+  sortBy?: 'name' | 'expirationDate' | 'createdAt';
+  sortOrder?: 'asc' | 'desc';
+}
+
+// Chart Data Types
+export interface ChartData {
+  name: string;
+  value: number;
+  color?: string;
+}
+
+export interface TimeSeriesData {
+  date: string;
+  value: number;
+  label?: string;
+}
+
+// Notification Types
+export interface Notification {
+  id: string;
+  type: 'success' | 'error' | 'warning' | 'info';
+  title: string;
+  message: string;
+  timestamp: string;
+  read: boolean;
+  productId?: string;
+  actionUrl?: string;
+}
+
+// Route Protection
+export interface RouteGuard {
+  allowedRoles: UserRole[];
+  redirectTo?: string;
+}
+
+// Configuration
+export interface AppConfig {
+  apiBaseUrl: string;
+  appName: string;
+  version: string;
+  features: {
+    enableNotifications: boolean;
+    enableQRCodes: boolean;
+    enableCharts: boolean;
+    enableMaps: boolean;
+  };
+}

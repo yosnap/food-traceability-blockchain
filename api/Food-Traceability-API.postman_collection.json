@@ -1,0 +1,501 @@
+{
+  "info": {
+    "name": "Food Traceability API",
+    "description": "API for food traceability system with Hyperledger Fabric",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "food-traceability-api-2025"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3001",
+      "type": "string"
+    },
+    {
+      "key": "producerToken",
+      "value": "producer-token",
+      "type": "string"
+    },
+    {
+      "key": "consumerToken",
+      "value": "consumer-token",
+      "type": "string"
+    },
+    {
+      "key": "adminToken",
+      "value": "admin-token",
+      "type": "string"
+    },
+    {
+      "key": "productId",
+      "value": "PROD-001",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "📊 Health & Info",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "health"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "System Info",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/info",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "info"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Detailed Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/health/detailed",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "health", "detailed"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Basic Test",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/test",
+              "host": ["{{baseUrl}}"],
+              "path": ["test"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "👤 Users",
+      "item": [
+        {
+          "name": "Register User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"address\": \"0x1234567890123456789012345678901234567890\",\n  \"name\": \"Juan Pérez\",\n  \"role\": \"PRODUCER\",\n  \"email\": \"juan@ejemplo.com\",\n  \"phone\": \"+34123456789\",\n  \"location\": {\n    \"address\": \"Calle Falsa 123\",\n    \"city\": \"Madrid\",\n    \"country\": \"España\",\n    \"coordinates\": {\n      \"lat\": 40.4168,\n      \"lng\": -3.7038\n    }\n  },\n  \"licenseNumber\": \"PROD-2024-001\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/users/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "register"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{producerToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "me"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update Profile",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{producerToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Juan Pérez González\",\n  \"email\": \"juan.nuevo@ejemplo.com\",\n  \"phone\": \"+34987654321\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/users/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "me"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get User by Address",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{adminToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/0x1234567890123456789012345678901234567890",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "0x1234567890123456789012345678901234567890"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Set Notification Settings",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{consumerToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"enableNotifications\": true,\n  \"notificationDays\": 3,\n  \"enableEmailNotifications\": true,\n  \"enablePushNotifications\": true,\n  \"quietHours\": {\n    \"start\": \"22:00\",\n    \"end\": \"08:00\"\n  },\n  \"categorySettings\": {\n    \"VEGETABLES\": { \"enabled\": true, \"daysAhead\": 2 },\n    \"FRUITS\": { \"enabled\": true, \"daysAhead\": 1 },\n    \"MEAT\": { \"enabled\": true, \"daysAhead\": 1 }\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/users/me/notifications",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "me", "notifications"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Notification Settings",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{consumerToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/users/me/notifications",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "users", "me", "notifications"]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "🍎 Food Products",
+      "item": [
+        {
+          "name": "Ping Chaincode",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{producerToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/food/ping",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "food", "ping"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create Product",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "// Generate unique product ID",
+                  "pm.globals.set(\"productId\", \"PROD-\" + Date.now());",
+                  "pm.globals.set(\"batchNumber\", \"BATCH-2024-\" + Date.now());"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{producerToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"id\": \"{{productId}}\",\n  \"batchNumber\": \"{{batchNumber}}\",\n  \"name\": \"Tomates Cherry Orgánicos\",\n  \"category\": \"VEGETABLES\",\n  \"description\": \"Tomates cherry cultivados orgánicamente\",\n  \"quantity\": 100,\n  \"productionDate\": \"2025-06-29\",\n  \"expirationDate\": \"2025-07-05\",\n  \"origin\": {\n    \"farm\": \"Finca El Sol\",\n    \"location\": \"Almería, España\",\n    \"coordinates\": {\n      \"lat\": 36.8381,\n      \"lng\": -2.4597\n    }\n  },\n  \"storageConditions\": {\n    \"temperature\": \"4-8°C\",\n    \"humidity\": \"85-90%\",\n    \"requirements\": [\"Refrigeración\", \"Ventilación\"]\n  },\n  \"allergens\": [],\n  \"weight\": 5.0,\n  \"volume\": 2.5,\n  \"brand\": \"Orgánicos El Sol\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/food/products",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "food", "products"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Product by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{consumerToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/food/products/{{productId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "food", "products", "{{productId}}"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get My Products",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{producerToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/food/products",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "food", "products"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Products by Category",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{consumerToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/food/products/category/VEGETABLES",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "food", "products", "category", "VEGETABLES"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Expiring Products (2 days)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{consumerToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/food/expiring",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "food", "expiring"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Expiring Products (7 days)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{consumerToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/food/expiring?daysAhead=7",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "food", "expiring"],
+              "query": [
+                {
+                  "key": "daysAhead",
+                  "value": "7"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get Expiring Products by Category",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{consumerToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/food/expiring?category=VEGETABLES",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "food", "expiring"],
+              "query": [
+                {
+                  "key": "category",
+                  "value": "VEGETABLES"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Transfer Product",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{producerToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"newOwner\": \"0x2345678901234567890123456789012345678901\",\n  \"transferType\": \"SALE\",\n  \"location\": {\n    \"address\": \"Mercado Central\",\n    \"city\": \"Madrid\",\n    \"country\": \"España\"\n  },\n  \"quantity\": 50,\n  \"price\": 125.50,\n  \"conditions\": \"Transporte refrigerado\",\n  \"notes\": \"Entrega programada para mañana\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/food/products/{{productId}}/transfer",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "food", "products", "{{productId}}", "transfer"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Mark as Consumed",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{consumerToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"consumedDate\": \"2025-06-29T20:00:00Z\",\n  \"rating\": 5,\n  \"notes\": \"Excelente calidad y sabor\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/food/products/{{productId}}/consume",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "food", "products", "{{productId}}", "consume"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get User Stats",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "{{consumerToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/food/stats",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "food", "stats"]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
