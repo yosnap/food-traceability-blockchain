@@ -1,0 +1,65 @@
+{
+  "name": "food-traceability-blockchain",
+  "version": "1.0.0",
+  "description": "Sistema de trazabilidad de alimentos con Hyperledger Fabric y gestión de fechas de caducidad",
+  "main": "index.js",
+  "scripts": {
+    "install-all": "npm run install-chaincode && npm run install-api && npm run install-web && npm run install-mobile",
+    "install-chaincode": "cd chaincode && npm install",
+    "install-api": "cd api && npm install",
+    "install-web": "cd web && npm install",
+    "install-mobile": "cd mobile-app && npm install",
+    "dev": "concurrently \"npm run dev-api\" \"npm run dev-web\"",
+    "dev-api": "cd api && npm run dev",
+    "dev-web": "cd web && npm run dev",
+    "dev-mobile": "cd mobile-app && expo start",
+    "build": "npm run build-chaincode && npm run build-web",
+    "build-chaincode": "cd chaincode && npm run build",
+    "build-web": "cd web && npm run build",
+    "test": "npm run test-chaincode && npm run test-api && npm run test-integration",
+    "test-chaincode": "cd chaincode && npm test",
+    "test-api": "cd api && npm test",
+    "test-integration": "cd tests/integration && npm test",
+    "test-e2e": "cd tests/e2e && npm test",
+    "setup-fabric": "./scripts/setup/setup-fabric.sh",
+    "deploy-chaincode": "./scripts/setup/deploy-chaincode.sh",
+    "start-network": "./scripts/setup/start-network.sh",
+    "stop-network": "./scripts/setup/stop-network.sh",
+    "clean": "npm run clean-chaincode && npm run clean-api && npm run clean-web",
+    "clean-chaincode": "cd chaincode && rm -rf node_modules dist",
+    "clean-api": "cd api && rm -rf node_modules dist",
+    "clean-web": "cd web && rm -rf node_modules .next"
+  },
+  "keywords": [
+    "blockchain",
+    "hyperledger-fabric",
+    "food-traceability",
+    "supply-chain",
+    "expiration-management",
+    "notifications",
+    "react-native",
+    "nextjs"
+  ],
+  "author": "Paulo <tu-email@example.com>",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.0",
+    "jest": "^29.7.0",
+    "eslint": "^8.55.0",
+    "prettier": "^3.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tu-usuario/food-traceability-blockchain.git"
+  },
+  "bugs": {
+    "url": "https://github.com/tu-usuario/food-traceability-blockchain/issues"
+  },
+  "homepage": "https://github.com/tu-usuario/food-traceability-blockchain#readme"
+}
