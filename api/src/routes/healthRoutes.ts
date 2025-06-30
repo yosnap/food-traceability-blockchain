@@ -48,7 +48,7 @@ router.get('/', async (req: Request, res: Response) => {
                     status: fabricStatus,
                     error: fabricError,
                     network: process.env.CHANNEL_NAME || 'mychannel',
-                    chaincode: process.env.CHAINCODE_NAME || 'foodtraceability'
+                    chaincode: process.env.CHAINCODE_NAME || 'food-traceability'
                 }
             },
             memory: {
@@ -136,7 +136,7 @@ router.get('/detailed', async (req: Request, res: Response) => {
                 port: process.env.PORT || 3001,
                 nodeEnv: process.env.NODE_ENV || 'development',
                 fabricNetwork: process.env.CHANNEL_NAME || 'mychannel',
-                chaincodeName: process.env.CHAINCODE_NAME || 'foodtraceability'
+                chaincodeName: process.env.CHAINCODE_NAME || 'food-traceability'
             }
         });
 

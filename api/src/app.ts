@@ -3,48 +3,56 @@
  * Conecta aplicaciones web y móvil con Hyperledger Fabric
  */
 
+// Cargar variables de entorno PRIMERO
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+
+console.log('🔧 DEBUG: .env path:', path.resolve(__dirname, '../.env'));
+console.log('🔧 DEBUG: CHAINCODE_NAME from env:', process.env.CHAINCODE_NAME);
+
+console.log('🔧 DEBUG: Importando express...');
+// Ahora importar el resto
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import dotenv from 'dotenv';
 import { errorHandler } from './middleware/errorHandler.js';
 import { requestLogger } from './middleware/requestLogger.js';
 import { authMiddleware } from './middleware/authMiddleware.js';
+console.log('🔧 DEBUG: Importando FabricService...');
 import { fabricService } from './services/FabricService.js';
+console.log('🔧 DEBUG: FabricService importado exitosamente');
 
 // Importar rutas
+console.log('🔧 DEBUG: Importando rutas...');
 import foodRoutes from './routes/foodRoutes.js';
+console.log('🔧 DEBUG: foodRoutes importado');
 import userRoutes from './routes/userRoutes.js';
+console.log('🔧 DEBUG: userRoutes importado');
 import healthRoutes from './routes/healthRoutes.js';
+console.log('🔧 DEBUG: healthRoutes importado');
 
-// Cargar variables de entorno
-dotenv.config();
-
+console.log('🔧 DEBUG: Creando aplicación Express...');
 // Crear aplicación Express
 const app = express();
-const PORT = process.env.PORT || 3001;
+console.log('🔧 DEBUG: Express creado');
+const PORT = parseInt(process.env.PORT || '3001', 10);
+console.log('🔧 DEBUG: PORT configurado:', PORT);
 
 // ==========================================
 // CONFIGURACIÓN GLOBAL
 // ==========================================
+console.log('🔧 DEBUG: Configurando middleware...');
 
-// Middleware de seguridad
-app.use(helmet({
-    contentSecurityPolicy: {
-        directives: {
-            defaultSrc: ["'self'"],
-            styleSrc: ["'self'", "'unsafe-inline'"],
-            scriptSrc: ["'self'"],
-            connectSrc: ["'self'"],
-            imgSrc: ["'self'", "data:", "https:"],
-            fontSrc: ["'self'"],
-            objectSrc: ["'none'"],
-            mediaSrc: ["'self'"],
-            frameSrc: ["'none'"],
-        },
-    },
-    crossOriginEmbedderPolicy: false
-}));
+console.log('🔧 DEBUG: Configurando helmet...');
+// Middleware de seguridad simplificado temporalmente
+app.use(helmet());
+console.log('🔧 DEBUG: Helmet configurado');
 
 // CORS configurado para desarrollo y producción
 const corsOptions = {
@@ -169,13 +177,15 @@ async function startServer() {
             }
         });
         
-        // Iniciar servidor HTTP
-        const server = app.listen(PORT, () => {
+        // Iniciar servidor HTTP en todas las interfaces (0.0.0.0)
+        const server = app.listen(PORT, '0.0.0.0', () => {
             console.log(`🌐 Servidor corriendo en puerto ${PORT}`);
             console.log(`📋 Ambiente: ${process.env.NODE_ENV || 'development'}`);
-            console.log(`🔗 API disponible en: http://localhost:${PORT}/api`);
-            console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
-            console.log(`ℹ️  Info del sistema: http://localhost:${PORT}/api/info`);
+            console.log(`🔗 API disponible en:`);
+            console.log(`   • Local: http://localhost:${PORT}/api`);
+            console.log(`   • Red local: http://192.168.1.67:${PORT}/api`);
+            console.log(`📊 Health check: http://192.168.1.67:${PORT}/api/health`);
+            console.log(`📱 Para móvil: http://192.168.1.67:${PORT}`);
         });
 
         // Configurar graceful shutdown

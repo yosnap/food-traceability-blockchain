@@ -22,6 +22,10 @@ import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/utils/api';
 import { Product, ProductStatus, UserRole } from '@/types';
 import SafeDate from '@/components/SafeDate';
+import TransferModal from '@/components/TransferModal';
+import NotificationBell from '@/components/NotificationBell';
+import { useNotifications } from '@/hooks/useNotifications';
+import { generateTestExpirationDates, calculateExpirationInfo } from '@/utils/expirationUtils';
 
 interface RetailerStats {
   totalInventory: number;
@@ -37,37 +41,40 @@ const mockStats: RetailerStats = {
   lowStock: 12
 };
 
+// Generar fechas de vencimiento variadas para testing
+const testDates = generateTestExpirationDates();
+
 const mockProducts: Product[] = [
   {
     id: 'ret-001',
-    name: 'Manzanas Orgánicas',
+    name: 'Pan Fresco Artesanal',
     batchNumber: 'RET-2025-001',
-    productionDate: '2025-01-15',
-    expirationDate: '2025-02-10',
+    productionDate: '2025-01-30',
+    expirationDate: testDates.expired, // Vencido hace 2 días
     status: ProductStatus.ACTIVE,
-    currentLocation: 'Supermercado Central - Sección Frutas',
-    temperature: 4,
-    humidity: 85,
+    currentLocation: 'Supermercado Valle Verde - Panadería',
+    temperature: 20,
+    humidity: 60,
     producer: {
       id: 'retailer-001',
       name: 'Supermercado Valle Verde',
       location: 'Centro Comercial Plaza Norte'
     },
     metadata: {
-      variety: 'Red Delicious',
-      weight: '50kg',
-      certification: 'Orgánico',
-      harvestDate: '2025-01-15'
+      variety: 'Artesanal',
+      weight: '20 unidades',
+      certification: 'Artesanal',
+      harvestDate: '2025-01-30'
     }
   },
   {
     id: 'ret-002',
     name: 'Leche Fresca Pasteurizada',
     batchNumber: 'RET-2025-002',
-    productionDate: '2025-01-25',
-    expirationDate: '2025-02-01',
+    productionDate: '2025-01-29',
+    expirationDate: testDates.tomorrow, // Vence mañana
     status: ProductStatus.ACTIVE,
-    currentLocation: 'Supermercado Central - Refrigerados',
+    currentLocation: 'Supermercado Valle Verde - Refrigerados',
     temperature: 2,
     humidity: 60,
     producer: {
@@ -77,9 +84,53 @@ const mockProducts: Product[] = [
     },
     metadata: {
       variety: 'Pasteurizada',
-      weight: '100L',
+      weight: '50L',
       certification: 'HACCP',
-      harvestDate: '2025-01-24'
+      harvestDate: '2025-01-28'
+    }
+  },
+  {
+    id: 'ret-003',
+    name: 'Manzanas Orgánicas',
+    batchNumber: 'RET-2025-003',
+    productionDate: '2025-01-25',
+    expirationDate: testDates.oneWeek, // Vence en 1 semana
+    status: ProductStatus.ACTIVE,
+    currentLocation: 'Supermercado Valle Verde - Sección Frutas',
+    temperature: 4,
+    humidity: 85,
+    producer: {
+      id: 'retailer-001',
+      name: 'Supermercado Valle Verde',
+      location: 'Centro Comercial Plaza Norte'
+    },
+    metadata: {
+      variety: 'Red Delicious',
+      weight: '30kg',
+      certification: 'Orgánico',
+      harvestDate: '2025-01-20'
+    }
+  },
+  {
+    id: 'ret-004',
+    name: 'Pescado Fresco del Día',
+    batchNumber: 'RET-2025-004',
+    productionDate: '2025-01-30',
+    expirationDate: testDates.today, // Vence hoy
+    status: ProductStatus.ACTIVE,
+    currentLocation: 'Supermercado Valle Verde - Pescadería',
+    temperature: 0,
+    humidity: 95,
+    producer: {
+      id: 'retailer-001',
+      name: 'Supermercado Valle Verde',
+      location: 'Centro Comercial Plaza Norte'
+    },
+    metadata: {
+      variety: 'Salmón',
+      weight: '15kg',
+      certification: 'Fresco',
+      harvestDate: '2025-01-30'
     }
   }
 ];
@@ -91,6 +142,16 @@ export default function RetailerDashboard() {
   const [products, setProducts] = useState<Product[]>(mockProducts);
   const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  
+  // Hook de notificaciones
+  const {
+    notifications,
+    stats: notificationStats,
+    markAsRead,
+    markAllAsRead
+  } = useNotifications(products);
 
   useEffect(() => {
     // Simplified auth check
@@ -168,6 +229,44 @@ export default function RetailerDashboard() {
     return diffDays <= 3 && diffDays > 0;
   };
 
+  const handleTransferClick = (product: Product) => {
+    setSelectedProduct(product);
+    setShowTransferModal(true);
+  };
+
+  const handleTransferComplete = (product: Product, toRole: UserRole, recipient: any) => {
+    setProducts(prevProducts => 
+      prevProducts.map(p => 
+        p.id === product.id 
+          ? { 
+              ...p, 
+              status: ProductStatus.IN_TRANSIT, 
+              currentLocation: `Vendido a ${recipient.name}`,
+              metadata: {
+                ...p.metadata,
+                transferHistory: [
+                  ...(p.metadata.transferHistory || []),
+                  {
+                    timestamp: new Date().toISOString(),
+                    fromRole: UserRole.RETAILER,
+                    toRole,
+                    recipient: recipient.name,
+                    location: recipient.location
+                  }
+                ]
+              }
+            }
+          : p
+      )
+    );
+
+    setStats(prevStats => ({
+      ...prevStats,
+      soldToday: prevStats.soldToday + 1,
+      activeProducts: prevStats.activeProducts - 1
+    }));
+  };
+
   return (
     <>
       <Head>
@@ -198,6 +297,13 @@ export default function RetailerDashboard() {
               </div>
 
               <div className="flex items-center space-x-4">
+                <NotificationBell
+                  notifications={notifications}
+                  stats={notificationStats}
+                  onMarkAsRead={markAsRead}
+                  onMarkAllAsRead={markAllAsRead}
+                />
+                
                 <button
                   onClick={loadDashboardData}
                   disabled={isLoading}
@@ -374,7 +480,10 @@ export default function RetailerDashboard() {
                         <button className="btn-secondary text-sm">
                           Ver Historial
                         </button>
-                        <button className="btn-primary text-sm">
+                        <button 
+                          onClick={() => handleTransferClick(product)}
+                          className="btn-primary text-sm"
+                        >
                           Vender
                         </button>
                       </div>
@@ -399,6 +508,15 @@ export default function RetailerDashboard() {
           </div>
         </main>
       </div>
+
+      {/* Transfer Modal */}
+      <TransferModal
+        isOpen={showTransferModal}
+        onClose={() => setShowTransferModal(false)}
+        product={selectedProduct}
+        fromRole={UserRole.RETAILER}
+        onTransferComplete={handleTransferComplete}
+      />
     </>
   );
 }

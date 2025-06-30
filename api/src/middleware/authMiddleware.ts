@@ -133,6 +133,12 @@ function getMockUser(token: string) {
             role: 'ADMIN',
             name: 'Administrador Sistema',
             isVerified: true
+        },
+        'demo-token-mobile-app-user': {
+            address: '0x7890123456789012345678901234567890123456',
+            role: 'CONSUMER',
+            name: 'Usuario Demo Móvil',
+            isVerified: true
         }
     };
 

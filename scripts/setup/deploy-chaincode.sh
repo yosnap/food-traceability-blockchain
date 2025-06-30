@@ -26,8 +26,8 @@ print_error() {
 
 echo "🚀 Desplegando chaincode de Food Traceability..."
 
-# Obtener directorio del proyecto
-PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# Usar el enlace simbólico sin espacios
+PROJECT_ROOT="/Users/paulo/food-traceability"
 print_status "Directorio del proyecto: $PROJECT_ROOT"
 
 # Cargar variables de entorno si existen

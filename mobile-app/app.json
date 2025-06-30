@@ -1,0 +1,45 @@
+{
+  "expo": {
+    "name": "Food Traceability",
+    "slug": "food-traceability-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.foodtraceability.mobile",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Esta aplicación usa la cámara para escanear códigos QR de productos.",
+        "NSMicrophoneUsageDescription": "Esta aplicación puede usar el micrófono para notificaciones de audio."
+      }
+    },
+    "android": {
+      "package": "com.foodtraceability.mobile",
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "WRITE_EXTERNAL_STORAGE",
+        "NOTIFICATIONS"
+      ]
+    },
+    "plugins": [
+      "expo-notifications",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Permitir acceso a la cámara para escanear códigos QR de productos alimentarios."
+        }
+      ],
+      [
+        "expo-barcode-scanner",
+        {
+          "cameraPermission": "Permitir acceso a la cámara para escanear códigos QR y códigos de barras."
+        }
+      ]
+    ],
+    "scheme": "food-traceability"
+  }
+}

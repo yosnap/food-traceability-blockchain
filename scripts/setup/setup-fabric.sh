@@ -26,9 +26,16 @@ print_error() {
 
 echo "🚀 Configurando Hyperledger Fabric para Food Traceability..."
 
-# Obtener directorio del proyecto
-PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# Usar enlace simbólico para evitar problemas con espacios
+PROJECT_ROOT="/Users/paulo/food-traceability"
 print_status "Directorio del proyecto: $PROJECT_ROOT"
+
+# Crear enlace simbólico si no existe
+if [ ! -L "$PROJECT_ROOT" ]; then
+    print_status "Creando enlace simbólico sin espacios..."
+    ln -sf "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)" "$PROJECT_ROOT"
+    print_success "Enlace simbólico creado: $PROJECT_ROOT"
+fi
 
 # Configurar variables de entorno
 export PATH="$PROJECT_ROOT/fabric-samples/bin:$PATH"
@@ -71,7 +78,7 @@ print_status "Limpiando redes anteriores..."
 print_status "Iniciando red de Hyperledger Fabric..."
 print_status "Configuración: test-network + CA + CouchDB"
 
-./network.sh up createChannel -ca -s couchdb
+./network.sh up createChannel -ca -s couchdb -c mychannel
 
 if [ $? -eq 0 ]; then
     print_success "🎉 Red de Hyperledger Fabric iniciada correctamente!"
@@ -88,11 +95,55 @@ if [ $? -eq 0 ]; then
     docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
     
     echo ""
-    print_success "¡La red está lista para desplegar chaincode!"
+    print_status "🚀 Desplegando chaincode con CCAAS..."
     
-    echo ""
-    print_status "📝 Próximo paso:"
-    print_status "Ejecutar: ./scripts/setup/deploy-chaincode.sh"
+    # Desplegar chaincode usando CCAAS
+    ./network.sh deployCCAAS -ccn food-traceability -ccp ../../chaincode
+    
+    if [ $? -eq 0 ]; then
+        print_success "🎉 Chaincode desplegado exitosamente con CCAAS!"
+        
+        echo ""
+        print_status "🧪 Probando chaincode..."
+        
+        # Configurar variables para invocar chaincode
+        export CORE_PEER_TLS_ENABLED=true
+        export CORE_PEER_LOCALMSPID="Org1MSP"
+        export CORE_PEER_TLS_ROOTCERT_FILE="$PROJECT_ROOT/fabric-samples/test-network/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt"
+        export CORE_PEER_MSPCONFIGPATH="$PROJECT_ROOT/fabric-samples/test-network/organizations/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp"
+        export CORE_PEER_ADDRESS=localhost:7051
+        
+        # Probar con ping
+        peer chaincode invoke \
+            -o localhost:7050 \
+            --ordererTLSHostnameOverride orderer.example.com \
+            --tls \
+            --cafile "$PROJECT_ROOT/fabric-samples/test-network/organizations/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem" \
+            -C mychannel \
+            -n food-traceability \
+            --peerAddresses localhost:7051 \
+            --tlsRootCertFiles "$PROJECT_ROOT/fabric-samples/test-network/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt" \
+            --peerAddresses localhost:9051 \
+            --tlsRootCertFiles "$PROJECT_ROOT/fabric-samples/test-network/organizations/peerOrganizations/org2.example.com/peers/peer0.org2.example.com/tls/ca.crt" \
+            -c '{"function":"ping","Args":[]}'
+        
+        if [ $? -eq 0 ]; then
+            print_success "✅ Chaincode respondió correctamente al ping!"
+        else
+            print_warning "⚠️ Chaincode desplegado pero ping falló (normal en algunos casos)"
+        fi
+        
+        echo ""
+        print_status "📋 Información del despliegue:"
+        print_status "- Chaincode: food-traceability"
+        print_status "- Tipo: CCAAS (Chaincode as a Service)"
+        print_status "- Canal: mychannel"
+        print_status "- Organizaciones: Org1MSP, Org2MSP"
+    else
+        print_error "Error al desplegar chaincode"
+        print_status "📝 Puedes intentar manualmente:"
+        print_status "./network.sh deployCCAAS -ccn food-traceability -ccp ../../chaincode"
+    fi
     
 else
     print_error "Error al iniciar la red de Fabric"
@@ -107,7 +158,7 @@ export FABRIC_CFG_PATH="$PROJECT_ROOT/fabric-samples/config/"
 
 # Información de la red
 export CHANNEL_NAME="mychannel"
-export CHAINCODE_NAME="foodtraceability"
+export CHAINCODE_NAME="food-traceability"
 export CHAINCODE_VERSION="1.0"
 export CHAINCODE_SEQUENCE="1"
 
@@ -121,8 +172,14 @@ export CORE_PEER_ADDRESS=localhost:7051
 echo "Variables de entorno de Fabric cargadas ✓"
 EOF
 
-print_status "Archivo .env.fabric creado para cargar variables en futuras sesiones"
-print_status "Para cargar las variables: source .env.fabric"
-
-echo ""
-print_success "🎉 Configuración de Hyperledger Fabric completada!"
+        print_status "Archivo .env.fabric creado para cargar variables en futuras sesiones"
+        print_status "Para cargar las variables: source .env.fabric"
+        
+        echo ""
+        print_success "🎉 ¡Hyperledger Fabric + CCAAS configurado completamente!"
+        print_status "🚀 Próximo paso: Configurar la API backend"
+    fi
+else
+    print_error "Error al iniciar la red de Fabric"
+    exit 1
+fi

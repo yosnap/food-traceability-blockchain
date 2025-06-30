@@ -233,6 +233,47 @@ export class UserController {
     }
 
     /**
+     * Obtiene estadísticas del usuario o generales
+     */
+    static async getUserStats(req: Request, res: Response, next: NextFunction): Promise<void> {
+        try {
+            // Mock data para estadísticas - en producción vendría de Fabric
+            const stats = {
+                totalProducts: 125,
+                activeProducts: 98,
+                expiredProducts: 12,
+                expiringIn7Days: 15,
+                notificationStats: {
+                    total: 27,
+                    unread: 8,
+                    critical: 3,
+                    warning: 12,
+                    info: 12
+                },
+                userActivity: {
+                    productsScanned: 45,
+                    transfersMade: 23,
+                    lastActivity: new Date().toISOString()
+                },
+                systemHealth: {
+                    fabricConnected: true,
+                    apiUptime: '99.8%',
+                    lastSync: new Date().toISOString()
+                }
+            };
+
+            res.json({
+                success: true,
+                data: stats,
+                timestamp: new Date().toISOString()
+            });
+
+        } catch (error) {
+            next(error);
+        }
+    }
+
+    /**
      * Actualiza el perfil del usuario
      */
     static async updateProfile(req: Request, res: Response, next: NextFunction): Promise<void> {

@@ -34,19 +34,34 @@ export class FabricService {
     private isInitialized: boolean = false;
 
     constructor() {
-        // Configuración desde variables de entorno
-        const basePath = process.cwd(); // directorio actual de trabajo
+        console.log('🔧 Constructor FabricService ejecutándose...');
+        // La configuración se cargará en initialize()
+        this.config = {} as FabricConfig;
+        console.log('✅ Constructor FabricService completado');
+    }
+
+    /**
+     * Carga la configuración desde variables de entorno
+     */
+    private loadConfig(): void {
+        const basePath = process.cwd();
         this.config = {
             networkPath: process.env.FABRIC_NETWORK_PATH || path.resolve(basePath, '../fabric-samples/test-network'),
             walletPath: process.env.FABRIC_WALLET_PATH || path.resolve(basePath, '../wallet'),
             userId: process.env.FABRIC_USER_ID || 'User1',
             channelName: process.env.CHANNEL_NAME || 'mychannel',
-            chaincodeName: process.env.CHAINCODE_NAME || 'foodtraceability',
+            chaincodeName: process.env.CHAINCODE_NAME || 'food-traceability',
             mspId: process.env.FABRIC_MSP_ID || 'Org1MSP',
             peerEndpoint: process.env.FABRIC_PEER_ENDPOINT || 'grpc://localhost:7051',
             caEndpoint: process.env.FABRIC_CA_ENDPOINT || 'http://localhost:7054'
         };
 
+        console.log('🔧 Variables de entorno:', {
+            FABRIC_NETWORK_PATH: process.env.FABRIC_NETWORK_PATH,
+            CHAINCODE_NAME: process.env.CHAINCODE_NAME,
+            basePath: basePath
+        });
+        
         console.log('🔧 Configuración de Fabric:', {
             networkPath: this.config.networkPath,
             walletPath: this.config.walletPath,
@@ -79,42 +94,73 @@ export class FabricService {
      * Proceso de inicialización de Fabric
      */
     private async initializeFabric(): Promise<void> {
-        // Crear wallet
-        this.wallet = await Wallets.newFileSystemWallet(this.config.walletPath);
+        try {
+            console.log('🔧 [STEP 1] Cargando configuración...');
+            // Cargar configuración con variables de entorno actualizadas
+            this.loadConfig();
+            
+            console.log('🔧 [STEP 2] Creando wallet...');
+            // Crear wallet
+            this.wallet = await Wallets.newFileSystemWallet(this.config.walletPath);
+            console.log('✅ Wallet creado exitosamente');
 
-        // Verificar si existe el usuario en el wallet
-        const userExists = await this.wallet.get(this.config.userId);
-        if (!userExists) {
-            console.log(`👤 Usuario ${this.config.userId} no encontrado en wallet`);
-            await this.enrollUser();
-        }
-
-        // Crear gateway
-        this.gateway = new Gateway();
-
-        // Configurar conexión
-        const connectionProfile = this.buildConnectionProfile();
-        
-        const connectOptions = {
-            wallet: this.wallet,
-            identity: this.config.userId,
-            discovery: { enabled: true, asLocalhost: true },
-            eventHandlerOptions: {
-                commitTimeout: 100,
-                strategy: null
+            console.log('🔧 [STEP 3] Verificando usuario en wallet...');
+            // Verificar si existe el usuario en el wallet
+            const userExists = await this.wallet.get(this.config.userId);
+            if (!userExists) {
+                console.log(`👤 Usuario ${this.config.userId} no encontrado en wallet`);
+                console.log('🔧 [STEP 4] Enrollando usuario...');
+                await this.enrollUser();
+            } else {
+                console.log(`✅ Usuario ${this.config.userId} encontrado en wallet`);
             }
-        };
 
-        await this.gateway.connect(connectionProfile, connectOptions);
-        console.log('✅ Gateway conectado');
+            console.log('🔧 [STEP 5] Creando gateway...');
+            // Crear gateway
+            this.gateway = new Gateway();
+            console.log('✅ Gateway creado');
 
-        // Obtener red y contratos
-        this.network = await this.gateway.getNetwork(this.config.channelName);
-        this.contract = this.network.getContract(this.config.chaincodeName, 'FoodTraceabilityContract');
-        this.userContract = this.network.getContract(this.config.chaincodeName, 'UserContract');
+            console.log('🔧 [STEP 6] Construyendo perfil de conexión...');
+            // Configurar conexión
+            const connectionProfile = this.buildConnectionProfile();
+            console.log('✅ Perfil de conexión construido');
+            
+            const connectOptions = {
+                wallet: this.wallet,
+                identity: this.config.userId,
+                discovery: { enabled: true, asLocalhost: true },
+                eventHandlerOptions: {
+                    commitTimeout: 100,
+                    strategy: null
+                }
+            };
 
-        this.isInitialized = true;
-        console.log('✅ Servicio Fabric inicializado correctamente');
+            console.log('🔧 [STEP 7] Conectando gateway...');
+            console.log('   - Peer endpoint:', this.config.peerEndpoint);
+            console.log('   - Channel:', this.config.channelName);
+            console.log('   - Chaincode:', this.config.chaincodeName);
+            
+            await this.gateway.connect(connectionProfile, connectOptions);
+            console.log('✅ Gateway conectado');
+
+            console.log('🔧 [STEP 8] Obteniendo red...');
+            // Obtener red y contratos
+            this.network = await this.gateway.getNetwork(this.config.channelName);
+            console.log('✅ Red obtenida');
+
+            console.log('🔧 [STEP 9] Obteniendo contratos...');
+            this.contract = this.network.getContract(this.config.chaincodeName, 'FoodTraceabilityContract');
+            this.userContract = this.network.getContract(this.config.chaincodeName, 'UserContract');
+            console.log('✅ Contratos obtenidos');
+
+            this.isInitialized = true;
+            console.log('✅ [STEP 10] Servicio Fabric inicializado correctamente');
+            
+        } catch (error: any) {
+            console.error('❌ Error en initializeFabric:', error.message);
+            console.error('❌ Stack trace:', error.stack);
+            throw error;
+        }
     }
 
     /**
@@ -183,20 +229,45 @@ export class FabricService {
                 'organizations/peerOrganizations/org1.example.com/users/User1@org1.example.com/msp'
             );
             
+            console.log('🔧 Credentials path:', credentialsPath);
+            
+            // Verificar que la ruta existe
+            if (!fs.existsSync(credentialsPath)) {
+                throw new Error(`Credentials path not found: ${credentialsPath}`);
+            }
+            
             // Leer certificado
             const certPath = path.join(credentialsPath, 'signcerts/cert.pem');
+            console.log('🔧 Cert path:', certPath);
+            
+            if (!fs.existsSync(certPath)) {
+                throw new Error(`Certificate not found: ${certPath}`);
+            }
+            
             const certificate = fs.readFileSync(certPath, 'utf8');
+            console.log('✅ Certificate loaded');
             
             // Encontrar y leer clave privada
             const keystorePath = path.join(credentialsPath, 'keystore');
+            console.log('🔧 Keystore path:', keystorePath);
+            
+            if (!fs.existsSync(keystorePath)) {
+                throw new Error(`Keystore path not found: ${keystorePath}`);
+            }
+            
             const keystoreFiles = fs.readdirSync(keystorePath);
+            console.log('🔧 Keystore files:', keystoreFiles);
+            
             const keyFile = keystoreFiles.find(file => file.endsWith('_sk'));
             
             if (!keyFile) {
                 throw new Error('No private key file found');
             }
             
+            console.log('🔧 Using key file:', keyFile);
+            
             const privateKey = fs.readFileSync(path.join(keystorePath, keyFile), 'utf8');
+            console.log('✅ Private key loaded');
             
             const userIdentity = {
                 credentials: {
@@ -207,11 +278,13 @@ export class FabricService {
                 type: 'X.509'
             };
 
+            console.log('🔧 Putting identity in wallet...');
             await this.wallet!.put(this.config.userId, userIdentity);
             console.log(`✅ Usuario ${this.config.userId} enrollado con credenciales reales`);
 
         } catch (error: any) {
-            console.error('❌ Error al enrollar usuario:', error);
+            console.error('❌ Error al enrollar usuario:', error.message);
+            console.error('❌ Stack trace:', error.stack);
             throw error;
         }
     }

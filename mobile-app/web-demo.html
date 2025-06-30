@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Food Traceability Mobile - Demo</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #22c55e, #16a34a);
+            color: white;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
+            background: rgba(255,255,255,0.1);
+            border-radius: 20px;
+            padding: 30px;
+            backdrop-filter: blur(10px);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .app-icon {
+            font-size: 60px;
+            margin-bottom: 10px;
+        }
+        h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .subtitle {
+            opacity: 0.8;
+            margin-top: 5px;
+        }
+        .instruction {
+            background: rgba(255,255,255,0.2);
+            padding: 20px;
+            border-radius: 15px;
+            margin: 20px 0;
+        }
+        .steps {
+            list-style: none;
+            padding: 0;
+        }
+        .steps li {
+            background: rgba(255,255,255,0.1);
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 10px;
+            border-left: 4px solid #fbbf24;
+        }
+        .qr-section {
+            text-align: center;
+            margin: 30px 0;
+        }
+        .qr-placeholder {
+            width: 200px;
+            height: 200px;
+            background: white;
+            margin: 20px auto;
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #22c55e;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        .download-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin: 20px 0;
+        }
+        .btn {
+            padding: 12px 20px;
+            background: rgba(255,255,255,0.2);
+            border: none;
+            border-radius: 25px;
+            color: white;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+        .btn:hover {
+            background: rgba(255,255,255,0.3);
+            transform: translateY(-2px);
+        }
+        .feature {
+            display: flex;
+            align-items: center;
+            margin: 15px 0;
+        }
+        .feature-icon {
+            font-size: 24px;
+            margin-right: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="app-icon">🍎</div>
+            <h1>Food Traceability</h1>
+            <div class="subtitle">Aplicación Móvil</div>
+        </div>
+
+        <div class="instruction">
+            <h3>📱 Cómo Probar la App</h3>
+            <ol class="steps">
+                <li><strong>Instala Expo Go</strong><br>
+                    Descarga desde App Store (iOS) o Google Play (Android)
+                </li>
+                <li><strong>Escanea el QR</strong><br>
+                    Usa la app Expo Go para escanear el código QR
+                </li>
+                <li><strong>¡Disfruta!</strong><br>
+                    La app se cargará automáticamente en tu teléfono
+                </li>
+            </ol>
+        </div>
+
+        <div class="download-buttons">
+            <a href="https://apps.apple.com/app/expo-go/id982107779" class="btn" target="_blank">
+                📱 iOS
+            </a>
+            <a href="https://play.google.com/store/apps/details?id=host.exp.exponent" class="btn" target="_blank">
+                🤖 Android
+            </a>
+        </div>
+
+        <div class="qr-section">
+            <h3>Código QR de la App</h3>
+            <div class="qr-placeholder">
+                Código QR aparecerá<br>en la terminal de Expo
+            </div>
+            <p><small>Busca el QR en la terminal donde ejecutaste `expo start`</small></p>
+        </div>
+
+        <div class="instruction">
+            <h3>🚀 Funcionalidades</h3>
+            <div class="feature">
+                <span class="feature-icon">🏠</span>
+                <div>
+                    <strong>Dashboard</strong><br>
+                    <small>Resumen de notificaciones y estadísticas</small>
+                </div>
+            </div>
+            <div class="feature">
+                <span class="feature-icon">📷</span>
+                <div>
+                    <strong>Escáner QR</strong><br>
+                    <small>Escanea productos para ver su trazabilidad</small>
+                </div>
+            </div>
+            <div class="feature">
+                <span class="feature-icon">🔔</span>
+                <div>
+                    <strong>Notificaciones</strong><br>
+                    <small>Alertas de productos próximos a vencer</small>
+                </div>
+            </div>
+            <div class="feature">
+                <span class="feature-icon">👤</span>
+                <div>
+                    <strong>Perfil</strong><br>
+                    <small>Cambio de roles y configuración</small>
+                </div>
+            </div>
+        </div>
+
+        <div class="instruction">
+            <h3>🧪 Códigos de Prueba</h3>
+            <p>Usa estos códigos en el escáner manual:</p>
+            <ul>
+                <li><code>PROD-001</code> - Tomates Cherry (Vencido)</li>
+                <li><code>RET-002</code> - Leche Premium (Vence mañana)</li>
+                <li><code>DIST-001</code> - Productos Lácteos</li>
+                <li><code>PROC-003</code> - Café Molido</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // Auto-refresh cada 30 segundos para verificar si hay cambios
+        setTimeout(() => {
+            location.reload();
+        }, 30000);
+    </script>
+</body>
+</html>

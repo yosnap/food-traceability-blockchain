@@ -16,12 +16,16 @@ import {
   MapPinIcon,
   TruckIcon,
   ArchiveBoxIcon,
-  ThermometerIcon
+  FireIcon
 } from '@heroicons/react/24/outline';
 import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/utils/api';
 import { Product, ProductStatus, UserRole } from '@/types';
 import SafeDate from '@/components/SafeDate';
+import TransferModal from '@/components/TransferModal';
+import NotificationBell from '@/components/NotificationBell';
+import { useNotifications } from '@/hooks/useNotifications';
+import { generateTestExpirationDates, calculateExpirationInfo } from '@/utils/expirationUtils';
 
 interface DistributorStats {
   totalShipments: number;
@@ -37,35 +41,16 @@ const mockStats: DistributorStats = {
   warehouses: 4
 };
 
+// Generar fechas de vencimiento variadas para testing
+const testDates = generateTestExpirationDates();
+
 const mockProducts: Product[] = [
   {
     id: 'dist-001',
-    name: 'Lote Frutas Mixtas',
+    name: 'Productos Lácteos Urgentes',
     batchNumber: 'DIST-2025-001',
-    productionDate: '2025-01-18',
-    expirationDate: '2025-02-15',
-    status: ProductStatus.IN_TRANSIT,
-    currentLocation: 'Camión Ruta Norte - KM 45',
-    temperature: 4,
-    humidity: 80,
-    producer: {
-      id: 'distributor-001',
-      name: 'Logística Valle Central',
-      location: 'Centro de Distribución Principal'
-    },
-    metadata: {
-      variety: 'Mixto',
-      weight: '2000kg',
-      certification: 'Cadena de Frío',
-      harvestDate: '2025-01-15'
-    }
-  },
-  {
-    id: 'dist-002',
-    name: 'Productos Lácteos Refrigerados',
-    batchNumber: 'DIST-2025-002',
-    productionDate: '2025-01-22',
-    expirationDate: '2025-02-05',
+    productionDate: '2025-01-28',
+    expirationDate: testDates.tomorrow, // Vence mañana
     status: ProductStatus.ACTIVE,
     currentLocation: 'Almacén Refrigerado A',
     temperature: 2,
@@ -79,7 +64,51 @@ const mockProducts: Product[] = [
       variety: 'Lácteos',
       weight: '1500kg',
       certification: 'HACCP',
+      harvestDate: '2025-01-28'
+    }
+  },
+  {
+    id: 'dist-002',
+    name: 'Lote Frutas Mixtas',
+    batchNumber: 'DIST-2025-002',
+    productionDate: '2025-01-25',
+    expirationDate: testDates.threeDays, // Vence en 3 días
+    status: ProductStatus.IN_TRANSIT,
+    currentLocation: 'Camión Ruta Norte - KM 45',
+    temperature: 4,
+    humidity: 80,
+    producer: {
+      id: 'distributor-001',
+      name: 'Logística Valle Central',
+      location: 'Centro de Distribución Principal'
+    },
+    metadata: {
+      variety: 'Mixto',
+      weight: '2000kg',
+      certification: 'Cadena de Frío',
       harvestDate: '2025-01-20'
+    }
+  },
+  {
+    id: 'dist-003',
+    name: 'Verduras Orgánicas Frescas',
+    batchNumber: 'DIST-2025-003',
+    productionDate: '2025-01-29',
+    expirationDate: testDates.oneWeek, // Vence en 1 semana
+    status: ProductStatus.ACTIVE,
+    currentLocation: 'Centro de Distribución - Zona B',
+    temperature: 3,
+    humidity: 90,
+    producer: {
+      id: 'distributor-001',
+      name: 'Logística Valle Central',
+      location: 'Centro de Distribución Principal'
+    },
+    metadata: {
+      variety: 'Verduras',
+      weight: '800kg',
+      certification: 'Orgánico',
+      harvestDate: '2025-01-28'
     }
   }
 ];
@@ -92,6 +121,16 @@ export default function DistributorDashboard() {
   const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  
+  // Hook de notificaciones
+  const {
+    notifications,
+    stats: notificationStats,
+    markAsRead,
+    markAllAsRead
+  } = useNotifications(products);
 
   useEffect(() => {
     // Simplified auth check
@@ -175,6 +214,43 @@ export default function DistributorDashboard() {
     return { color: 'text-red-600', status: 'Crítica' };
   };
 
+  const handleTransferClick = (product: Product) => {
+    setSelectedProduct(product);
+    setShowTransferModal(true);
+  };
+
+  const handleTransferComplete = (product: Product, toRole: UserRole, recipient: any) => {
+    setProducts(prevProducts => 
+      prevProducts.map(p => 
+        p.id === product.id 
+          ? { 
+              ...p, 
+              status: ProductStatus.IN_TRANSIT, 
+              currentLocation: `En tránsito hacia ${recipient.name}`,
+              metadata: {
+                ...p.metadata,
+                transferHistory: [
+                  ...(p.metadata.transferHistory || []),
+                  {
+                    timestamp: new Date().toISOString(),
+                    fromRole: UserRole.DISTRIBUTOR,
+                    toRole,
+                    recipient: recipient.name,
+                    location: recipient.location
+                  }
+                ]
+              }
+            }
+          : p
+      )
+    );
+
+    setStats(prevStats => ({
+      ...prevStats,
+      inTransit: prevStats.inTransit + 1
+    }));
+  };
+
   return (
     <>
       <Head>
@@ -205,6 +281,13 @@ export default function DistributorDashboard() {
               </div>
 
               <div className="flex items-center space-x-4">
+                <NotificationBell
+                  notifications={notifications}
+                  stats={notificationStats}
+                  onMarkAsRead={markAsRead}
+                  onMarkAllAsRead={markAllAsRead}
+                />
+                
                 <button
                   onClick={loadDashboardData}
                   disabled={isLoading}
@@ -350,7 +433,7 @@ export default function DistributorDashboard() {
                               <span className="ml-1">{product.status}</span>
                             </span>
                             <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 ${tempStatus.color}`}>
-                              <ClockIcon className="w-3 h-3 mr-1" />
+                              <FireIcon className="w-3 h-3 mr-1" />
                               {tempStatus.status}
                             </span>
                           </div>
@@ -382,8 +465,11 @@ export default function DistributorDashboard() {
                           <button className="btn-secondary text-sm">
                             Rastrear
                           </button>
-                          <button className="btn-primary text-sm">
-                            Entregar
+                          <button 
+                            onClick={() => handleTransferClick(product)}
+                            className="btn-primary text-sm"
+                          >
+                            Transferir
                           </button>
                         </div>
                       </div>
@@ -408,6 +494,15 @@ export default function DistributorDashboard() {
           </div>
         </main>
       </div>
+
+      {/* Transfer Modal */}
+      <TransferModal
+        isOpen={showTransferModal}
+        onClose={() => setShowTransferModal(false)}
+        product={selectedProduct}
+        fromRole={UserRole.DISTRIBUTOR}
+        onTransferComplete={handleTransferComplete}
+      />
     </>
   );
 }

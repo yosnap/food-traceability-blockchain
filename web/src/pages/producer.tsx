@@ -20,6 +20,10 @@ import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/utils/api';
 import { Product, ProductStatus, UserRole } from '@/types';
 import SafeDate from '@/components/SafeDate';
+import TransferModal from '@/components/TransferModal';
+import NotificationBell from '@/components/NotificationBell';
+import { useNotifications } from '@/hooks/useNotifications';
+import { generateTestExpirationDates, calculateExpirationInfo } from '@/utils/expirationUtils';
 
 interface DashboardStats {
   totalProducts: number;
@@ -35,15 +39,18 @@ const mockStats: DashboardStats = {
   transfers: 156
 };
 
+// Generar fechas de vencimiento variadas para testing
+const testDates = generateTestExpirationDates();
+
 const mockProducts: Product[] = [
   {
     id: 'prod-001',
-    name: 'Manzanas Rojas Orgánicas',
+    name: 'Lechuga Hidropónica',
     batchNumber: 'BATCH-2025-001',
-    productionDate: '2025-01-15',
-    expirationDate: '2025-02-14',
+    productionDate: '2025-01-28',
+    expirationDate: testDates.expired, // Vencido hace 2 días
     status: ProductStatus.ACTIVE,
-    currentLocation: 'Finca San Pedro',
+    currentLocation: 'Finca San Pedro - Invernadero A',
     temperature: 4,
     humidity: 85,
     producer: {
@@ -52,18 +59,84 @@ const mockProducts: Product[] = [
       location: 'Valle Central, Costa Rica'
     },
     metadata: {
-      variety: 'Red Delicious',
-      weight: '500kg',
+      variety: 'Romana',
+      weight: '25kg',
       certification: 'Orgánico',
-      harvestDate: '2025-01-15'
+      harvestDate: '2025-01-28'
     }
   },
   {
     id: 'prod-002',
-    name: 'Café Arábica Premium',
+    name: 'Tomates Cherry',
     batchNumber: 'BATCH-2025-002',
+    productionDate: '2025-01-29',
+    expirationDate: testDates.today, // Vence hoy
+    status: ProductStatus.ACTIVE,
+    currentLocation: 'Finca San Pedro - Invernadero B',
+    temperature: 6,
+    humidity: 80,
+    producer: {
+      id: 'producer-001',
+      name: 'Finca San Pedro',
+      location: 'Valle Central, Costa Rica'
+    },
+    metadata: {
+      variety: 'Cherry',
+      weight: '15kg',
+      certification: 'Orgánico',
+      harvestDate: '2025-01-29'
+    }
+  },
+  {
+    id: 'prod-003',
+    name: 'Fresas Orgánicas',
+    batchNumber: 'BATCH-2025-003',
+    productionDate: '2025-01-29',
+    expirationDate: testDates.tomorrow, // Vence mañana
+    status: ProductStatus.ACTIVE,
+    currentLocation: 'Finca San Pedro - Campo C',
+    temperature: 2,
+    humidity: 90,
+    producer: {
+      id: 'producer-001',
+      name: 'Finca San Pedro',
+      location: 'Valle Central, Costa Rica'
+    },
+    metadata: {
+      variety: 'Albión',
+      weight: '10kg',
+      certification: 'Orgánico',
+      harvestDate: '2025-01-29'
+    }
+  },
+  {
+    id: 'prod-004',
+    name: 'Brócoli Fresco',
+    batchNumber: 'BATCH-2025-004',
+    productionDate: '2025-01-27',
+    expirationDate: testDates.threeDays, // Vence en 3 días
+    status: ProductStatus.ACTIVE,
+    currentLocation: 'Finca San Pedro - Campo D',
+    temperature: 1,
+    humidity: 95,
+    producer: {
+      id: 'producer-001',
+      name: 'Finca San Pedro',
+      location: 'Valle Central, Costa Rica'
+    },
+    metadata: {
+      variety: 'Calabrese',
+      weight: '30kg',
+      certification: 'Orgánico',
+      harvestDate: '2025-01-27'
+    }
+  },
+  {
+    id: 'prod-005',
+    name: 'Café Arábica Premium',
+    batchNumber: 'BATCH-2025-005',
     productionDate: '2025-01-10',
-    expirationDate: '2025-07-10',
+    expirationDate: testDates.oneMonth, // Vence en 1 mes
     status: ProductStatus.IN_TRANSIT,
     currentLocation: 'Centro de Procesamiento',
     temperature: 20,
@@ -79,6 +152,28 @@ const mockProducts: Product[] = [
       certification: 'Fair Trade',
       harvestDate: '2025-01-05'
     }
+  },
+  {
+    id: 'prod-006',
+    name: 'Manzanas Rojas Orgánicas',
+    batchNumber: 'BATCH-2025-006',
+    productionDate: '2025-01-15',
+    expirationDate: testDates.oneWeek, // Vence en 1 semana
+    status: ProductStatus.ACTIVE,
+    currentLocation: 'Finca San Pedro - Cámara Fría',
+    temperature: 0,
+    humidity: 85,
+    producer: {
+      id: 'producer-001',
+      name: 'Finca San Pedro',
+      location: 'Valle Central, Costa Rica'
+    },
+    metadata: {
+      variety: 'Red Delicious',
+      weight: '500kg',
+      certification: 'Orgánico',
+      harvestDate: '2025-01-15'
+    }
   }
 ];
 
@@ -90,6 +185,16 @@ export default function ProducerDashboard() {
   const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  
+  // Hook de notificaciones
+  const {
+    notifications,
+    stats: notificationStats,
+    markAsRead,
+    markAllAsRead
+  } = useNotifications(products);
 
   useEffect(() => {
     // Simplified auth check
@@ -179,6 +284,45 @@ export default function ProducerDashboard() {
     return diffDays <= 7 && diffDays > 0;
   };
 
+  const handleTransferClick = (product: Product) => {
+    setSelectedProduct(product);
+    setShowTransferModal(true);
+  };
+
+  const handleTransferComplete = (product: Product, toRole: UserRole, recipient: any) => {
+    // Update product status to IN_TRANSIT
+    setProducts(prevProducts => 
+      prevProducts.map(p => 
+        p.id === product.id 
+          ? { 
+              ...p, 
+              status: ProductStatus.IN_TRANSIT, 
+              currentLocation: `En tránsito hacia ${recipient.name}`,
+              metadata: {
+                ...p.metadata,
+                transferHistory: [
+                  ...(p.metadata.transferHistory || []),
+                  {
+                    timestamp: new Date().toISOString(),
+                    fromRole: UserRole.PRODUCER,
+                    toRole,
+                    recipient: recipient.name,
+                    location: recipient.location
+                  }
+                ]
+              }
+            }
+          : p
+      )
+    );
+
+    // Update stats
+    setStats(prevStats => ({
+      ...prevStats,
+      transfers: prevStats.transfers + 1
+    }));
+  };
+
   return (
     <>
       <Head>
@@ -209,6 +353,13 @@ export default function ProducerDashboard() {
               </div>
 
               <div className="flex items-center space-x-4">
+                <NotificationBell
+                  notifications={notifications}
+                  stats={notificationStats}
+                  onMarkAsRead={markAsRead}
+                  onMarkAllAsRead={markAllAsRead}
+                />
+                
                 <button
                   onClick={loadDashboardData}
                   disabled={isLoading}
@@ -341,23 +492,49 @@ export default function ProducerDashboard() {
               </div>
 
               <div className="space-y-4">
-                {filteredProducts.map((product) => (
-                  <div key={product.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-3 mb-2">
-                          <h4 className="text-lg font-medium text-gray-900">{product.name}</h4>
-                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(product.status)}`}>
-                            {getStatusIcon(product.status)}
-                            <span className="ml-1">{product.status}</span>
-                          </span>
-                          {isExpiringSoon(product.expirationDate) && (
-                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-                              <ExclamationTriangleIcon className="w-3 h-3 mr-1" />
-                              Vence Pronto
+                {filteredProducts.map((product) => {
+                  const expirationInfo = calculateExpirationInfo(product);
+                  const needsUrgentAttention = ['critical', 'warning'].includes(expirationInfo.urgencyLevel);
+                  
+                  return (
+                    <div 
+                      key={product.id} 
+                      className={`border rounded-lg p-4 hover:shadow-md transition-shadow ${
+                        expirationInfo.urgencyLevel === 'critical' 
+                          ? 'border-red-300 bg-red-50' 
+                          : expirationInfo.urgencyLevel === 'warning'
+                          ? 'border-orange-300 bg-orange-50'
+                          : 'border-gray-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-3 mb-2">
+                            <h4 className="text-lg font-medium text-gray-900">{product.name}</h4>
+                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(product.status)}`}>
+                              {getStatusIcon(product.status)}
+                              <span className="ml-1">{product.status}</span>
                             </span>
-                          )}
-                        </div>
+                            
+                            {/* Indicador de caducidad mejorado */}
+                            {expirationInfo.urgencyLevel !== 'normal' && (
+                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${expirationInfo.urgencyColor} ${
+                                expirationInfo.urgencyLevel === 'critical' ? 'animate-pulse' : ''
+                              }`}>
+                                {expirationInfo.urgencyLevel === 'critical' && <ExclamationTriangleIcon className="w-3 h-3 mr-1" />}
+                                {expirationInfo.urgencyLevel === 'warning' && <ClockIcon className="w-3 h-3 mr-1" />}
+                                {expirationInfo.urgencyLevel === 'info' && <CalendarIcon className="w-3 h-3 mr-1" />}
+                                {expirationInfo.urgencyMessage}
+                              </span>
+                            )}
+                            
+                            {/* Badge para productos que no se pueden transferir */}
+                            {!expirationInfo.canTransfer && (
+                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 border border-gray-300">
+                                No Transferible
+                              </span>
+                            )}
+                          </div>
                         
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
                           <div className="flex items-center">
@@ -381,20 +558,36 @@ export default function ProducerDashboard() {
                         </div>
                       </div>
 
-                      <div className="flex items-center space-x-2">
-                        <Link
-                          href={`/producer/products/${product.id}`}
-                          className="btn-secondary text-sm"
-                        >
-                          Ver Detalles
-                        </Link>
-                        <button className="btn-primary text-sm">
-                          Generar QR
-                        </button>
+                          <div className="flex items-center space-x-2">
+                            <Link
+                              href={`/producer/products/${product.id}`}
+                              className="btn-secondary text-sm"
+                            >
+                              Ver Detalles
+                            </Link>
+                            
+                            {/* Botón de transferir con restricciones de caducidad */}
+                            <button 
+                              onClick={() => handleTransferClick(product)}
+                              disabled={!expirationInfo.canTransfer}
+                              className={`px-3 py-1 rounded text-sm transition-colors ${
+                                expirationInfo.canTransfer
+                                  ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                              }`}
+                              title={!expirationInfo.canTransfer ? 'No se puede transferir producto vencido o que vence hoy' : ''}
+                            >
+                              Transferir
+                            </button>
+                            
+                            <button className="btn-primary text-sm">
+                              Generar QR
+                            </button>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                ))}
+                    );
+                  })}
               </div>
 
               {filteredProducts.length === 0 && (
@@ -413,6 +606,15 @@ export default function ProducerDashboard() {
           </div>
         </main>
       </div>
+
+      {/* Transfer Modal */}
+      <TransferModal
+        isOpen={showTransferModal}
+        onClose={() => setShowTransferModal(false)}
+        product={selectedProduct}
+        fromRole={UserRole.PRODUCER}
+        onTransferComplete={handleTransferComplete}
+      />
     </>
   );
 }

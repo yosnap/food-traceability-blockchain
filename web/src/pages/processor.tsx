@@ -21,6 +21,10 @@ import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/utils/api';
 import { Product, ProductStatus, UserRole } from '@/types';
 import SafeDate from '@/components/SafeDate';
+import TransferModal from '@/components/TransferModal';
+import NotificationBell from '@/components/NotificationBell';
+import { useNotifications } from '@/hooks/useNotifications';
+import { generateTestExpirationDates, calculateExpirationInfo } from '@/utils/expirationUtils';
 
 interface ProcessorStats {
   totalBatches: number;
@@ -36,15 +40,18 @@ const mockStats: ProcessorStats = {
   rawMaterials: 45
 };
 
+// Generar fechas de vencimiento variadas para testing
+const testDates = generateTestExpirationDates();
+
 const mockProducts: Product[] = [
   {
     id: 'proc-001',
-    name: 'Jugo de Manzana Natural',
+    name: 'Jugo de Naranja Pasteurizado',
     batchNumber: 'PROC-2025-001',
-    productionDate: '2025-01-20',
-    expirationDate: '2025-03-20',
+    productionDate: '2025-01-29',
+    expirationDate: testDates.today, // Vence hoy
     status: ProductStatus.ACTIVE,
-    currentLocation: 'Planta Procesadora Central',
+    currentLocation: 'Planta Procesadora Central - Línea A',
     temperature: 4,
     humidity: 70,
     producer: {
@@ -53,18 +60,40 @@ const mockProducts: Product[] = [
       location: 'Zona Industrial, San José'
     },
     metadata: {
-      variety: 'Procesado',
-      weight: '1000L',
+      variety: 'Pasteurizado',
+      weight: '500L',
       certification: 'HACCP',
-      harvestDate: '2025-01-15'
+      harvestDate: '2025-01-28'
     }
   },
   {
     id: 'proc-002',
-    name: 'Café Molido Premium',
+    name: 'Yogurt Natural Procesado',
     batchNumber: 'PROC-2025-002',
+    productionDate: '2025-01-27',
+    expirationDate: testDates.threeDays, // Vence en 3 días
+    status: ProductStatus.ACTIVE,
+    currentLocation: 'Cámara de Refrigeración B',
+    temperature: 2,
+    humidity: 80,
+    producer: {
+      id: 'processor-001',
+      name: 'Procesadora Valle Verde',
+      location: 'Zona Industrial, San José'
+    },
+    metadata: {
+      variety: 'Natural',
+      weight: '200kg',
+      certification: 'HACCP',
+      harvestDate: '2025-01-25'
+    }
+  },
+  {
+    id: 'proc-003',
+    name: 'Café Molido Premium',
+    batchNumber: 'PROC-2025-003',
     productionDate: '2025-01-18',
-    expirationDate: '2025-07-18',
+    expirationDate: testDates.oneMonth, // Vence en 1 mes
     status: ProductStatus.IN_TRANSIT,
     currentLocation: 'Almacén de Distribución',
     temperature: 20,
@@ -80,6 +109,28 @@ const mockProducts: Product[] = [
       certification: 'Orgánico',
       harvestDate: '2025-01-05'
     }
+  },
+  {
+    id: 'proc-004',
+    name: 'Salsa de Tomate Concentrada',
+    batchNumber: 'PROC-2025-004',
+    productionDate: '2025-01-28',
+    expirationDate: testDates.oneWeek, // Vence en 1 semana
+    status: ProductStatus.ACTIVE,
+    currentLocation: 'Área de Envasado - Línea C',
+    temperature: 18,
+    humidity: 60,
+    producer: {
+      id: 'processor-001',
+      name: 'Procesadora Valle Verde',
+      location: 'Zona Industrial, San José'
+    },
+    metadata: {
+      variety: 'Concentrada',
+      weight: '300kg',
+      certification: 'HACCP',
+      harvestDate: '2025-01-26'
+    }
   }
 ];
 
@@ -91,6 +142,16 @@ export default function ProcessorDashboard() {
   const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  
+  // Hook de notificaciones
+  const {
+    notifications,
+    stats: notificationStats,
+    markAsRead,
+    markAllAsRead
+  } = useNotifications(products);
 
   useEffect(() => {
     // Simplified auth check
@@ -167,6 +228,46 @@ export default function ProcessorDashboard() {
     }
   };
 
+  const handleTransferClick = (product: Product) => {
+    setSelectedProduct(product);
+    setShowTransferModal(true);
+  };
+
+  const handleTransferComplete = (product: Product, toRole: UserRole, recipient: any) => {
+    // Update product status to IN_TRANSIT
+    setProducts(prevProducts => 
+      prevProducts.map(p => 
+        p.id === product.id 
+          ? { 
+              ...p, 
+              status: ProductStatus.IN_TRANSIT, 
+              currentLocation: `En tránsito hacia ${recipient.name}`,
+              metadata: {
+                ...p.metadata,
+                transferHistory: [
+                  ...(p.metadata.transferHistory || []),
+                  {
+                    timestamp: new Date().toISOString(),
+                    fromRole: UserRole.PROCESSOR,
+                    toRole,
+                    recipient: recipient.name,
+                    location: recipient.location
+                  }
+                ]
+              }
+            }
+          : p
+      )
+    );
+
+    // Update stats
+    setStats(prevStats => ({
+      ...prevStats,
+      activeProcessing: prevStats.activeProcessing - 1,
+      readyProducts: prevStats.readyProducts + 1
+    }));
+  };
+
   return (
     <>
       <Head>
@@ -197,6 +298,13 @@ export default function ProcessorDashboard() {
               </div>
 
               <div className="flex items-center space-x-4">
+                <NotificationBell
+                  notifications={notifications}
+                  stats={notificationStats}
+                  onMarkAsRead={markAsRead}
+                  onMarkAllAsRead={markAllAsRead}
+                />
+                
                 <button
                   onClick={loadDashboardData}
                   disabled={isLoading}
@@ -367,7 +475,10 @@ export default function ProcessorDashboard() {
                         <button className="btn-secondary text-sm">
                           Ver Detalles
                         </button>
-                        <button className="btn-primary text-sm">
+                        <button 
+                          onClick={() => handleTransferClick(product)}
+                          className="btn-primary text-sm"
+                        >
                           Transferir
                         </button>
                       </div>
@@ -392,6 +503,15 @@ export default function ProcessorDashboard() {
           </div>
         </main>
       </div>
+
+      {/* Transfer Modal */}
+      <TransferModal
+        isOpen={showTransferModal}
+        onClose={() => setShowTransferModal(false)}
+        product={selectedProduct}
+        fromRole={UserRole.PROCESSOR}
+        onTransferComplete={handleTransferComplete}
+      />
     </>
   );
 }

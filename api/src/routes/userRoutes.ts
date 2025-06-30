@@ -69,4 +69,12 @@ router.put('/me/notifications',
     UserController.setNotificationSettings
 );
 
+/**
+ * GET /api/users/stats
+ * Obtener estadísticas del usuario (público para demo)
+ */
+router.get('/stats',
+    UserController.getUserStats
+);
+
 export default router;
