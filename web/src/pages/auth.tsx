@@ -7,6 +7,7 @@ import { ArrowLeftIcon } from '@heroicons/react/24/outline';
 import { UserRole } from '@/types';
 import { mockLogin } from '@/utils/api';
 import { getRoleLabel, getRoleColor } from '@/utils/helpers';
+import { useAuth } from '@/hooks/useAuth';
 
 const roleDescriptions: Record<UserRole, string> = {
   [UserRole.PRODUCER]: 'Agricultores y productores primarios que cultivan y producen alimentos.',
@@ -28,6 +29,7 @@ const roleDashboards: Record<UserRole, string> = {
 
 export default function AuthPage() {
   const router = useRouter();
+  const { login } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
 
@@ -38,14 +40,42 @@ export default function AuthPage() {
       // Show loading message
       toast.loading('Iniciando sesión...', { id: 'login' });
       
-      // Mock login
-      const { token, user } = await mockLogin(role);
+      // Mock login - simplified version
+      const mockUser = {
+        address: `0x${Date.now().toString(16)}`,
+        name: `Usuario ${role}`,
+        role,
+        email: `${role.toLowerCase()}@example.com`,
+        phone: '+34123456789',
+        location: {
+          address: 'Calle Ejemplo 123',
+          city: 'Madrid',
+          country: 'España',
+          coordinates: { lat: 40.4168, lng: -3.7038 }
+        },
+        isActive: true,
+        isVerified: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      
+      const token = `${role.toLowerCase()}-token-${Date.now()}`;
+      
+      // Store in localStorage directly
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('authToken', token);
+        localStorage.setItem('authUser', JSON.stringify(mockUser));
+        localStorage.setItem('userRole', role);
+      }
       
       // Success message
-      toast.success(`¡Bienvenido, ${user.name}!`, { id: 'login' });
+      toast.success(`¡Bienvenido, ${mockUser.name}!`, { id: 'login' });
+      
+      // Small delay for UX
+      await new Promise(resolve => setTimeout(resolve, 500));
       
       // Redirect to appropriate dashboard
-      router.push(roleDashboards[role]);
+      window.location.href = roleDashboards[role];
       
     } catch (error) {
       toast.error('Error al iniciar sesión', { id: 'login' });
@@ -104,7 +134,7 @@ export default function AuthPage() {
                     onClick={() => setSelectedRole(role)}
                   >
                     <div className="text-center">
-                      <div className={`w-16 h-16 mx-auto mb-4 rounded-full bg-${getRoleColor(role)}-100 flex items-center justify-center`}>
+                      <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-blue-100 flex items-center justify-center">
                         <span className="text-2xl">
                           {{
                             [UserRole.PRODUCER]: '🌱',
@@ -125,7 +155,7 @@ export default function AuthPage() {
                         {roleDescriptions[role]}
                       </p>
                       
-                      <span className={`inline-block px-3 py-1 rounded-full text-xs font-medium bg-${getRoleColor(role)}-100 text-${getRoleColor(role)}-800`}>
+                      <span className="inline-block px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                         {role}
                       </span>
                     </div>
@@ -136,7 +166,7 @@ export default function AuthPage() {
               /* Login Confirmation */
               <div className="max-w-md mx-auto">
                 <div className="card text-center">
-                  <div className={`w-20 h-20 mx-auto mb-6 rounded-full bg-${getRoleColor(selectedRole)}-100 flex items-center justify-center`}>
+                  <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-blue-100 flex items-center justify-center">
                     <span className="text-3xl">
                       {{
                         [UserRole.PRODUCER]: '🌱',

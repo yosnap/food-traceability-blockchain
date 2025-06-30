@@ -1,0 +1,418 @@
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/router';
+import Head from 'next/head';
+import Link from 'next/link';
+import { toast } from 'react-hot-toast';
+import {
+  PlusIcon,
+  MagnifyingGlassIcon,
+  DocumentTextIcon,
+  ClockIcon,
+  CheckCircleIcon,
+  ExclamationTriangleIcon,
+  ArrowRightIcon,
+  ArrowLeftIcon,
+  CalendarIcon,
+  MapPinIcon,
+  QrCodeIcon
+} from '@heroicons/react/24/outline';
+import { useAuth } from '@/hooks/useAuth';
+import { api } from '@/utils/api';
+import { Product, ProductStatus, UserRole } from '@/types';
+import SafeDate from '@/components/SafeDate';
+
+interface DashboardStats {
+  totalProducts: number;
+  activeProducts: number;
+  expiringSoon: number;
+  transfers: number;
+}
+
+const mockStats: DashboardStats = {
+  totalProducts: 45,
+  activeProducts: 32,
+  expiringSoon: 8,
+  transfers: 156
+};
+
+const mockProducts: Product[] = [
+  {
+    id: 'prod-001',
+    name: 'Manzanas Rojas Orgánicas',
+    batchNumber: 'BATCH-2025-001',
+    productionDate: '2025-01-15',
+    expirationDate: '2025-02-14',
+    status: ProductStatus.ACTIVE,
+    currentLocation: 'Finca San Pedro',
+    temperature: 4,
+    humidity: 85,
+    producer: {
+      id: 'producer-001',
+      name: 'Finca San Pedro',
+      location: 'Valle Central, Costa Rica'
+    },
+    metadata: {
+      variety: 'Red Delicious',
+      weight: '500kg',
+      certification: 'Orgánico',
+      harvestDate: '2025-01-15'
+    }
+  },
+  {
+    id: 'prod-002',
+    name: 'Café Arábica Premium',
+    batchNumber: 'BATCH-2025-002',
+    productionDate: '2025-01-10',
+    expirationDate: '2025-07-10',
+    status: ProductStatus.IN_TRANSIT,
+    currentLocation: 'Centro de Procesamiento',
+    temperature: 20,
+    humidity: 45,
+    producer: {
+      id: 'producer-001',
+      name: 'Finca San Pedro',
+      location: 'Valle Central, Costa Rica'
+    },
+    metadata: {
+      variety: 'Arábica',
+      weight: '100kg',
+      certification: 'Fair Trade',
+      harvestDate: '2025-01-05'
+    }
+  }
+];
+
+export default function ProducerDashboard() {
+  const router = useRouter();
+  const { user, isAuthenticated } = useAuth();
+  const [stats, setStats] = useState<DashboardStats>(mockStats);
+  const [products, setProducts] = useState<Product[]>(mockProducts);
+  const [isLoading, setIsLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [currentUser, setCurrentUser] = useState<any>(null);
+
+  useEffect(() => {
+    // Simplified auth check
+    if (typeof window !== 'undefined') {
+      const storedRole = localStorage.getItem('userRole');
+      const storedUser = localStorage.getItem('authUser');
+      
+      if (!storedRole || !storedUser) {
+        router.push('/auth');
+        return;
+      }
+      
+      if (storedRole !== UserRole.PRODUCER) {
+        toast.error('Acceso denegado: Se requiere rol de Productor');
+        router.push('/auth');
+        return;
+      }
+      
+      // Set current user from localStorage
+      try {
+        setCurrentUser(JSON.parse(storedUser));
+      } catch (error) {
+        console.error('Error parsing user:', error);
+      }
+    }
+    
+    loadDashboardData();
+  }, []);
+
+  const loadDashboardData = async () => {
+    setIsLoading(true);
+    try {
+      // In a real implementation, this would fetch from the API
+      // const dashboardData = await api.get('/dashboard/producer');
+      // setStats(dashboardData.stats);
+      // setProducts(dashboardData.products);
+      
+      toast.success('Dashboard actualizado');
+    } catch (error) {
+      toast.error('Error al cargar datos del dashboard');
+      console.error('Dashboard error:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const filteredProducts = products.filter(product =>
+    product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    product.batchNumber.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const getStatusColor = (status: ProductStatus) => {
+    switch (status) {
+      case ProductStatus.ACTIVE:
+        return 'bg-green-100 text-green-800';
+      case ProductStatus.IN_TRANSIT:
+        return 'bg-blue-100 text-blue-800';
+      case ProductStatus.EXPIRED:
+        return 'bg-red-100 text-red-800';
+      case ProductStatus.RECALLED:
+        return 'bg-orange-100 text-orange-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getStatusIcon = (status: ProductStatus) => {
+    switch (status) {
+      case ProductStatus.ACTIVE:
+        return <CheckCircleIcon className="w-4 h-4" />;
+      case ProductStatus.IN_TRANSIT:
+        return <ClockIcon className="w-4 h-4" />;
+      case ProductStatus.EXPIRED:
+        return <ExclamationTriangleIcon className="w-4 h-4" />;
+      case ProductStatus.RECALLED:
+        return <ExclamationTriangleIcon className="w-4 h-4" />;
+      default:
+        return <DocumentTextIcon className="w-4 h-4" />;
+    }
+  };
+
+  const isExpiringSoon = (expirationDate: string) => {
+    const expiry = new Date(expirationDate);
+    const today = new Date();
+    const diffTime = expiry.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays <= 7 && diffDays > 0;
+  };
+
+  return (
+    <>
+      <Head>
+        <title>Dashboard Productor - Food Traceability</title>
+        <meta name="description" content="Panel de control para productores agrícolas" />
+      </Head>
+
+      <div className="min-h-screen bg-gray-50">
+        {/* Header */}
+        <header className="bg-white shadow-sm border-b">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between h-16">
+              <div className="flex items-center space-x-4">
+                <Link href="/" className="flex items-center space-x-2 text-gray-600 hover:text-gray-900">
+                  <ArrowLeftIcon className="w-5 h-5" />
+                  <span>Inicio</span>
+                </Link>
+                
+                <div className="flex items-center space-x-3">
+                  <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center">
+                    <span className="text-white font-bold">🌱</span>
+                  </div>
+                  <div>
+                    <h1 className="text-lg font-semibold text-gray-900">Panel Productor</h1>
+                    <p className="text-sm text-gray-500">{currentUser?.name || 'Productor'}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-4">
+                <button
+                  onClick={loadDashboardData}
+                  disabled={isLoading}
+                  className="btn-secondary"
+                >
+                  {isLoading ? 'Actualizando...' : 'Actualizar'}
+                </button>
+                
+                <Link href="/auth" className="btn-primary">
+                  Cambiar Usuario
+                </Link>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <main className="py-8">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            {/* Welcome Section */}
+            <div className="mb-8">
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                ¡Bienvenido, {currentUser?.name || 'Productor'}!
+              </h2>
+              <p className="text-gray-600">
+                Gestiona tus productos agrícolas y mantén un control completo de la trazabilidad
+              </p>
+            </div>
+
+            {/* Stats Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+              <div className="card">
+                <div className="flex items-center">
+                  <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <DocumentTextIcon className="w-6 h-6 text-blue-600" />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">Total Productos</p>
+                    <p className="text-2xl font-semibold text-gray-900">{stats.totalProducts}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="card">
+                <div className="flex items-center">
+                  <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
+                    <CheckCircleIcon className="w-6 h-6 text-green-600" />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">Activos</p>
+                    <p className="text-2xl font-semibold text-gray-900">{stats.activeProducts}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="card">
+                <div className="flex items-center">
+                  <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+                    <ExclamationTriangleIcon className="w-6 h-6 text-orange-600" />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">Próximos a Vencer</p>
+                    <p className="text-2xl font-semibold text-gray-900">{stats.expiringSoon}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="card">
+                <div className="flex items-center">
+                  <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                    <ArrowRightIcon className="w-6 h-6 text-purple-600" />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">Transferencias</p>
+                    <p className="text-2xl font-semibold text-gray-900">{stats.transfers}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions Section */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+              <Link href="/producer/create-product" className="card hover:shadow-lg transition-shadow cursor-pointer">
+                <div className="text-center">
+                  <div className="w-16 h-16 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+                    <PlusIcon className="w-8 h-8 text-green-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Nuevo Producto</h3>
+                  <p className="text-gray-600 text-sm">Registra un nuevo lote de productos</p>
+                </div>
+              </Link>
+
+              <Link href="/producer/transfer" className="card hover:shadow-lg transition-shadow cursor-pointer">
+                <div className="text-center">
+                  <div className="w-16 h-16 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+                    <ArrowRightIcon className="w-8 h-8 text-blue-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Transferir Productos</h3>
+                  <p className="text-gray-600 text-sm">Envía productos a procesadores</p>
+                </div>
+              </Link>
+
+              <Link href="/producer/reports" className="card hover:shadow-lg transition-shadow cursor-pointer">
+                <div className="text-center">
+                  <div className="w-16 h-16 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+                    <DocumentTextIcon className="w-8 h-8 text-purple-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Reportes</h3>
+                  <p className="text-gray-600 text-sm">Genera reportes de producción</p>
+                </div>
+              </Link>
+            </div>
+
+            {/* Products Section */}
+            <div className="card">
+              <div className="flex items-center justify-between mb-6">
+                <h3 className="text-lg font-semibold text-gray-900">Mis Productos</h3>
+                
+                <div className="relative">
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <input
+                    type="text"
+                    placeholder="Buscar productos..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                {filteredProducts.map((product) => (
+                  <div key={product.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-3 mb-2">
+                          <h4 className="text-lg font-medium text-gray-900">{product.name}</h4>
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(product.status)}`}>
+                            {getStatusIcon(product.status)}
+                            <span className="ml-1">{product.status}</span>
+                          </span>
+                          {isExpiringSoon(product.expirationDate) && (
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                              <ExclamationTriangleIcon className="w-3 h-3 mr-1" />
+                              Vence Pronto
+                            </span>
+                          )}
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
+                          <div className="flex items-center">
+                            <QrCodeIcon className="w-4 h-4 mr-2" />
+                            <span>{product.batchNumber}</span>
+                          </div>
+                          <div className="flex items-center">
+                            <CalendarIcon className="w-4 h-4 mr-2" />
+                            <span>Vence: <SafeDate date={product.expirationDate} /></span>
+                          </div>
+                          <div className="flex items-center">
+                            <MapPinIcon className="w-4 h-4 mr-2" />
+                            <span>{product.currentLocation}</span>
+                          </div>
+                        </div>
+
+                        <div className="mt-2 text-sm text-gray-500">
+                          <span className="mr-4">Peso: {product.metadata.weight}</span>
+                          <span className="mr-4">Temp: {product.temperature}°C</span>
+                          <span>Humedad: {product.humidity}%</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <Link
+                          href={`/producer/products/${product.id}`}
+                          className="btn-secondary text-sm"
+                        >
+                          Ver Detalles
+                        </Link>
+                        <button className="btn-primary text-sm">
+                          Generar QR
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {filteredProducts.length === 0 && (
+                <div className="text-center py-8">
+                  <DocumentTextIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No hay productos</h3>
+                  <p className="text-gray-600 mb-4">
+                    {searchTerm ? 'No se encontraron productos con ese término' : 'Aún no has registrado ningún producto'}
+                  </p>
+                  <Link href="/producer/create-product" className="btn-primary">
+                    Crear Primer Producto
+                  </Link>
+                </div>
+              )}
+            </div>
+          </div>
+        </main>
+      </div>
+    </>
+  );
+}

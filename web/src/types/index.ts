@@ -286,3 +286,35 @@ export interface AppConfig {
     enableMaps: boolean;
   };
 }
+
+// Additional types for producer dashboard
+export enum ProductStatus {
+  ACTIVE = 'ACTIVE',
+  IN_TRANSIT = 'IN_TRANSIT',
+  EXPIRED = 'EXPIRED',
+  RECALLED = 'RECALLED',
+  CONSUMED = 'CONSUMED'
+}
+
+export interface Product {
+  id: string;
+  name: string;
+  batchNumber: string;
+  productionDate: string;
+  expirationDate: string;
+  status: ProductStatus;
+  currentLocation: string;
+  temperature: number;
+  humidity: number;
+  producer: {
+    id: string;
+    name: string;
+    location: string;
+  };
+  metadata: {
+    variety?: string;
+    weight: string;
+    certification?: string;
+    harvestDate?: string;
+  };
+}

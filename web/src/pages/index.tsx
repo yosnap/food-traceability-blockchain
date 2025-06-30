@@ -224,7 +224,7 @@ export default function HomePage() {
                   key={roleItem.role}
                   className={`card cursor-pointer transition-all duration-300 hover:scale-105 ${
                     selectedRole === roleItem.role
-                      ? `ring-2 ring-${roleItem.color}-500 bg-${roleItem.color}-50`
+                      ? 'ring-2 ring-blue-500 bg-blue-50'
                       : 'hover:shadow-lg'
                   }`}
                   onClick={() => setSelectedRole(
@@ -245,7 +245,7 @@ export default function HomePage() {
                         {roleItem.features.map((feature, index) => (
                           <div
                             key={index}
-                            className={`text-xs px-3 py-1 rounded-full bg-${roleItem.color}-100 text-${roleItem.color}-800`}
+                            className="text-xs px-3 py-1 rounded-full bg-blue-100 text-blue-800"
                           >
                             {feature}
                           </div>
@@ -255,7 +255,7 @@ export default function HomePage() {
                     
                     <Link
                       href={`/${roleItem.role.toLowerCase()}`}
-                      className={`mt-4 inline-block text-sm font-medium text-${roleItem.color}-600 hover:text-${roleItem.color}-700`}
+                      className="mt-4 inline-block text-sm font-medium text-blue-600 hover:text-blue-700"
                     >
                       Acceder como {roleItem.title} →
                     </Link>
