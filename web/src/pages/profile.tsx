@@ -62,6 +62,7 @@ export default function ProfilePage() {
   const [walletInfo, setWalletInfo] = useState<WalletInfo | null>(null);
   const [showPrivateKey, setShowPrivateKey] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [walletProvider, setWalletProvider] = useState<'metamask' | 'predefined' | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -117,11 +118,11 @@ export default function ProfilePage() {
           setUserInfo(completeUserInfo);
           
           // Cargar información del wallet
+          const providerType = localStorage.getItem('walletProvider');
+          setWalletProvider(providerType as 'metamask' | 'predefined');
+          
           try {
-            // Verificar si es una wallet de MetaMask
-            const walletProvider = localStorage.getItem('walletProvider');
-            
-            if (walletProvider === 'metamask') {
+            if (providerType === 'metamask') {
               // Para MetaMask, usar la dirección del usuario
               const metaMaskWallet: WalletInfo = {
                 address: parsedUser.address,
@@ -156,7 +157,7 @@ export default function ProfilePage() {
           
           console.log('👤 Perfil de usuario cargado:', {
             user: completeUserInfo,
-            walletProvider: walletProvider || 'unknown'
+            walletProvider: providerType || 'unknown'
           });
         } else {
           toast.error('No se encontró información del usuario', { id: 'profile-error' });
@@ -363,9 +364,24 @@ export default function ProfilePage() {
             {/* Información del Wallet ethers.js */}
             {walletInfo && (
               <div className="card">
-                <div className="flex items-center space-x-3 mb-6">
-                  <CreditCardIcon className="w-6 h-6 text-purple-600" />
-                  <h2 className="text-xl font-semibold text-gray-900">Wallet ethers.js</h2>
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center space-x-3">
+                    <CreditCardIcon className="w-6 h-6 text-purple-600" />
+                    <h2 className="text-xl font-semibold text-gray-900">Wallet ethers.js</h2>
+                  </div>
+                  {walletProvider && (
+                    <div className="flex items-center space-x-2">
+                      {walletProvider === 'metamask' ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                          🦊 MetaMask
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          🔑 Predefinido
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
                 
                 <div className="space-y-6">
