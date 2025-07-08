@@ -30,24 +30,40 @@ export default function TransferProductsPage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
   useEffect(() => {
-    // Check auth
-    if (typeof window !== 'undefined') {
-      const storedRole = localStorage.getItem('userRole');
-      const storedUser = localStorage.getItem('authUser');
+    let mounted = true;
+    let loadStarted = false;
+    
+    const checkAuthAndLoad = async () => {
+      if (!mounted || loadStarted) return;
+      loadStarted = true;
       
-      if (!storedRole || !storedUser) {
-        router.push('/auth');
-        return;
+      // Check auth
+      if (typeof window !== 'undefined') {
+        const storedRole = localStorage.getItem('userRole');
+        const storedUser = localStorage.getItem('authUser');
+        
+        if (!storedRole || !storedUser) {
+          router.push('/auth');
+          return;
+        }
+        
+        if (storedRole !== UserRole.PRODUCER) {
+          toast.error('Acceso denegado: Se requiere rol de Productor');
+          router.push('/auth');
+          return;
+        }
       }
-      
-      if (storedRole !== UserRole.PRODUCER) {
-        toast.error('Acceso denegado: Se requiere rol de Productor');
-        router.push('/auth');
-        return;
-      }
-    }
 
-    loadProducts();
+      if (mounted) {
+        await loadProducts();
+      }
+    };
+    
+    checkAuthAndLoad();
+    
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const loadProducts = async () => {
@@ -100,9 +116,9 @@ export default function TransferProductsPage() {
         setProducts(transferableProducts);
         
         if (transferableProducts.length === 0) {
-          toast.info('No tienes productos disponibles para transferir');
+          console.log('ℹ️ No hay productos disponibles para transferir');
         } else {
-          toast.success(`${transferableProducts.length} productos disponibles para transferir`);
+          console.log(`✅ ${transferableProducts.length} productos disponibles para transferir`);
         }
       } else {
         console.log('ℹ️ No se encontraron productos');

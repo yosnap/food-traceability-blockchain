@@ -39,24 +39,40 @@ export default function ReportsPage() {
   const [selectedReport, setSelectedReport] = useState<'overview' | 'products' | 'transfers'>('overview');
 
   useEffect(() => {
-    // Check auth
-    if (typeof window !== 'undefined') {
-      const storedRole = localStorage.getItem('userRole');
-      const storedUser = localStorage.getItem('authUser');
+    let mounted = true;
+    let loadStarted = false;
+    
+    const checkAuthAndLoad = async () => {
+      if (!mounted || loadStarted) return;
+      loadStarted = true;
       
-      if (!storedRole || !storedUser) {
-        router.push('/auth');
-        return;
+      // Check auth
+      if (typeof window !== 'undefined') {
+        const storedRole = localStorage.getItem('userRole');
+        const storedUser = localStorage.getItem('authUser');
+        
+        if (!storedRole || !storedUser) {
+          router.push('/auth');
+          return;
+        }
+        
+        if (storedRole !== UserRole.PRODUCER) {
+          toast.error('Acceso denegado: Se requiere rol de Productor');
+          router.push('/auth');
+          return;
+        }
       }
-      
-      if (storedRole !== UserRole.PRODUCER) {
-        toast.error('Acceso denegado: Se requiere rol de Productor');
-        router.push('/auth');
-        return;
-      }
-    }
 
-    loadReportData();
+      if (mounted) {
+        await loadReportData();
+      }
+    };
+    
+    checkAuthAndLoad();
+    
+    return () => {
+      mounted = false;
+    };
   }, [selectedDateRange]);
 
   const loadReportData = async () => {
@@ -106,12 +122,12 @@ export default function ReportsPage() {
         const reportStats = calculateStats(convertedProducts);
         setStats(reportStats);
         
-        toast.success('Reportes actualizados correctamente');
+        console.log('✅ Reportes actualizados correctamente');
       } else {
         console.log('ℹ️ No se encontraron productos para reportes');
         setProducts([]);
         setStats(null);
-        toast.info('No hay datos disponibles para generar reportes');
+        console.log('ℹ️ No hay datos disponibles para generar reportes');
       }
       
     } catch (error: any) {
