@@ -15,6 +15,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { useAuth } from '@/hooks/useAuth';
 import { FoodCategory } from '@/types';
+import Breadcrumb from '@/components/Breadcrumb';
 
 interface CreateProductForm {
   name: string;
@@ -297,6 +298,15 @@ export default function CreateProduct() {
 
         <main className="py-8">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            {/* Breadcrumb */}
+            <div className="mb-6">
+              <Breadcrumb 
+                items={[
+                  { label: 'Productos', href: '/producer' },
+                  { label: 'Crear Producto', current: true }
+                ]}
+              />
+            </div>
             <form onSubmit={handleSubmit} className="space-y-8">
               {/* Información Básica */}
               <div className="card">

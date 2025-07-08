@@ -22,6 +22,27 @@ app.use((req, res, next) => {
 // Inicializar Fabric Gateway
 try {
     await fabricGatewayService.initialize();
+    
+    // Agregar función getAllProducts si no existe
+    if (!fabricGatewayService.getAllProducts) {
+        fabricGatewayService.getAllProducts = async function() {
+            try {
+                const result = await this.evaluateTransactionAsUser(
+                    'admin',
+                    'admin',
+                    'food',
+                    'getAllProducts'
+                );
+                const products = JSON.parse(result);
+                console.log(`✅ Obtenidos ${products.length} productos del blockchain`);
+                return products;
+            } catch (error) {
+                console.error('❌ Error obteniendo todos los productos:', error.message);
+                return [];
+            }
+        };
+    }
+    
     console.log('✅ FabricGatewayService inicializado');
 } catch (error) {
     console.error('❌ Error inicializando FabricGatewayService:', error.message);
@@ -163,13 +184,21 @@ app.post('/api/food/products', simpleAuth, async (req, res) => {
 
 app.get('/api/food/products', simpleAuth, async (req, res) => {
     try {
-        // Por ahora retornar array vacío - funcionalidad principal
+        console.log('📋 Obteniendo todos los productos del blockchain...');
+        
+        // Obtener productos reales del blockchain
+        const products = await fabricGatewayService.getAllProducts();
+        
+        console.log(`✅ Se encontraron ${products.length} productos en el blockchain`);
+        
         res.json({
             success: true,
-            data: [],
+            data: products,
+            count: products.length,
             timestamp: new Date().toISOString()
         });
     } catch (error) {
+        console.error('❌ Error obteniendo productos:', error.message);
         res.status(500).json({
             success: false,
             message: 'Error obteniendo productos',

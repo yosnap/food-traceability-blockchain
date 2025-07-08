@@ -14,7 +14,9 @@ import {
   ArrowLeftIcon,
   CalendarIcon,
   MapPinIcon,
-  QrCodeIcon
+  QrCodeIcon,
+  PencilIcon,
+  TrashIcon
 } from '@heroicons/react/24/outline';
 import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/utils/api';
@@ -24,6 +26,7 @@ import TransferModal from '@/components/TransferModal';
 import NotificationBell from '@/components/NotificationBell';
 import { useNotifications } from '@/hooks/useNotifications';
 import { calculateExpirationInfo } from '@/utils/expirationUtils';
+import Breadcrumb from '@/components/Breadcrumb';
 
 interface DashboardStats {
   totalProducts: number;
@@ -44,13 +47,19 @@ const mockStats: DashboardStats = {
 export default function ProducerDashboard() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuth();
-  const [stats, setStats] = useState<DashboardStats>(mockStats);
+  const [stats, setStats] = useState<DashboardStats>({ totalProducts: 0, activeProducts: 0, expiringSoon: 0, transfers: 0 });
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [showQRModal, setShowQRModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [qrCode, setQrCode] = useState<string>('');
+  const [isUpdating, setIsUpdating] = useState(false);
   
   // Hook de notificaciones
   const {
@@ -143,23 +152,26 @@ export default function ProducerDashboard() {
         const convertedProducts = productsResponse.data.map((foodAsset: any) => ({
           id: foodAsset.id,
           name: foodAsset.name,
-          batchNumber: foodAsset.batchNumber,
-          productionDate: foodAsset.productionDate,
-          expirationDate: foodAsset.expirationDate,
+          batchNumber: foodAsset.batchNumber || foodAsset.attributes?.batchNumber,
+          productionDate: foodAsset.productionDate || foodAsset.attributes?.productionDate,
+          expirationDate: foodAsset.expirationDate || foodAsset.attributes?.expirationDate,
           status: foodAsset.status || ProductStatus.ACTIVE,
-          currentLocation: foodAsset.origin?.farmName || 'Sin ubicación',
-          temperature: foodAsset.storageConditions?.temperature || 4,
-          humidity: foodAsset.storageConditions?.humidity || 85,
+          currentLocation: foodAsset.origin?.farmName || foodAsset.attributes?.origin?.farmName || 'Sin ubicación',
+          temperature: foodAsset.storageConditions?.temperature || foodAsset.attributes?.storageConditions?.temperature || 4,
+          humidity: foodAsset.storageConditions?.humidity || foodAsset.attributes?.storageConditions?.humidity || 85,
           producer: {
             id: 'current-user',
-            name: foodAsset.origin?.farmName || 'Finca Demo',
-            location: foodAsset.origin?.location || 'Sin ubicación'
+            name: foodAsset.origin?.farmName || foodAsset.attributes?.origin?.farmName || 'Finca Demo',
+            location: foodAsset.origin?.location || foodAsset.attributes?.origin?.location || 'Sin ubicación'
           },
           metadata: {
-            variety: foodAsset.variety || 'Sin especificar',
-            weight: `${foodAsset.weight}kg` || 'Sin especificar',
-            certification: foodAsset.certifications?.join(', ') || 'Sin certificación',
-            harvestDate: foodAsset.productionDate
+            variety: foodAsset.variety || foodAsset.attributes?.variety || 'Sin especificar',
+            weight: foodAsset.weight ? `${foodAsset.weight}kg` : (foodAsset.attributes?.weight ? `${foodAsset.attributes.weight}kg` : 'Sin especificar'),
+            certification: foodAsset.certifications?.join(', ') || foodAsset.attributes?.certifications?.join(', ') || 'Sin certificación',
+            harvestDate: foodAsset.productionDate || foodAsset.attributes?.productionDate,
+            description: foodAsset.description || foodAsset.attributes?.description || 'Sin descripción',
+            brand: foodAsset.brand || foodAsset.attributes?.brand || 'Sin marca',
+            category: foodAsset.category || foodAsset.attributes?.category || 'Sin categoría'
           }
         }));
         
@@ -193,6 +205,7 @@ export default function ProducerDashboard() {
       setProducts([]);
     } finally {
       setIsLoading(false);
+      setIsInitialLoad(false);
     }
   };
 
@@ -278,6 +291,124 @@ export default function ProducerDashboard() {
     }));
   };
 
+  const handleGenerateQR = (product: Product) => {
+    try {
+      console.log(`📱 Generando código QR para producto: ${product.id}`);
+      
+      // Create QR data with product information
+      const qrData = {
+        productId: product.id,
+        name: product.name,
+        batchNumber: product.batchNumber,
+        productionDate: product.productionDate,
+        expirationDate: product.expirationDate,
+        producer: product.producer.name,
+        verifyUrl: `${window.location.origin}/verify/${product.id}`
+      };
+
+      // For now, create a simple QR code data string
+      const qrCodeData = `FOOD_TRACE:${JSON.stringify(qrData)}`;
+      setQrCode(qrCodeData);
+      setSelectedProduct(product);
+      setShowQRModal(true);
+      
+      toast.success('Código QR generado exitosamente');
+    } catch (error: any) {
+      console.error('❌ Error generando QR:', error);
+      toast.error('Error al generar código QR');
+    }
+  };
+
+  const handleEditProduct = (product: Product) => {
+    setSelectedProduct(product);
+    setShowEditModal(true);
+  };
+
+  const handleDeleteProduct = (product: Product) => {
+    setSelectedProduct(product);
+    setShowDeleteModal(true);
+  };
+
+  const handleUpdateProduct = async (updatedData: any) => {
+    setIsUpdating(true);
+    try {
+      console.log(`📝 Actualizando producto: ${selectedProduct?.id}`, updatedData);
+      
+      // For now, we'll simulate an update by modifying local state
+      // In a real implementation, this would call an API endpoint
+      if (selectedProduct) {
+        const updatedProducts = products.map(p => 
+          p.id === selectedProduct.id 
+            ? {
+                ...p,
+                name: updatedData.name || p.name,
+                metadata: {
+                  ...p.metadata,
+                  description: updatedData.description || p.metadata.description,
+                  weight: updatedData.weight ? `${updatedData.weight}kg` : p.metadata.weight,
+                  brand: updatedData.brand || p.metadata.brand,
+                },
+                temperature: updatedData.storageConditions?.temperature || p.temperature,
+                humidity: updatedData.storageConditions?.humidity || p.humidity,
+              }
+            : p
+        );
+        
+        setProducts(updatedProducts);
+        setShowEditModal(false);
+        setSelectedProduct(null);
+        toast.success('Producto actualizado exitosamente');
+      }
+    } catch (error: any) {
+      console.error('❌ Error actualizando producto:', error);
+      toast.error('Error al actualizar producto');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    setIsUpdating(true);
+    try {
+      console.log(`🗑️ Marcando producto como inactivo: ${selectedProduct?.id}`);
+      
+      // In a real implementation, this would mark the product as inactive
+      // rather than actually deleting it from the blockchain
+      const updatedProducts = products.filter(p => p.id !== selectedProduct?.id);
+      setProducts(updatedProducts);
+      
+      toast.success('Producto marcado como inactivo');
+      setShowDeleteModal(false);
+      setSelectedProduct(null);
+      
+    } catch (error: any) {
+      console.error('❌ Error desactivando producto:', error);
+      toast.error('Error al desactivar producto');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  // Mostrar preloader durante la carga inicial
+  if (isInitialLoad) {
+    return (
+      <>
+        <Head>
+          <title>Dashboard Productor - Food Traceability</title>
+          <meta name="description" content="Panel de control para productores agrícolas" />
+        </Head>
+        
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-green-600 mx-auto mb-4"></div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Cargando Dashboard</h2>
+            <p className="text-gray-600">Conectando con el blockchain y cargando tus productos...</p>
+          </div>
+        </div>
+      </>
+    );
+  }
+
   return (
     <>
       <Head>
@@ -337,6 +468,14 @@ export default function ProducerDashboard() {
 
         <main className="py-8">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            {/* Breadcrumb */}
+            <div className="mb-6">
+              <Breadcrumb 
+                items={[
+                  { label: 'Dashboard Productor', current: true }
+                ]}
+              />
+            </div>
             {/* Welcome Section */}
             <div className="mb-8">
               <h2 className="text-2xl font-bold text-gray-900 mb-2">
@@ -525,13 +664,29 @@ export default function ProducerDashboard() {
                               Ver Detalles
                             </Link>
                             
+                            <button
+                              onClick={() => handleEditProduct(product)}
+                              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm flex items-center space-x-1"
+                            >
+                              <PencilIcon className="w-3 h-3" />
+                              <span>Editar</span>
+                            </button>
+                            
+                            <button
+                              onClick={() => handleDeleteProduct(product)}
+                              className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm flex items-center space-x-1"
+                            >
+                              <TrashIcon className="w-3 h-3" />
+                              <span>Eliminar</span>
+                            </button>
+                            
                             {/* Botón de transferir con restricciones de caducidad */}
                             <button 
                               onClick={() => handleTransferClick(product)}
                               disabled={!expirationInfo.canTransfer}
                               className={`px-3 py-1 rounded text-sm transition-colors ${
                                 expirationInfo.canTransfer
-                                  ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                                  ? 'bg-green-600 hover:bg-green-700 text-white'
                                   : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                               }`}
                               title={!expirationInfo.canTransfer ? 'No se puede transferir producto vencido o que vence hoy' : ''}
@@ -539,8 +694,11 @@ export default function ProducerDashboard() {
                               Transferir
                             </button>
                             
-                            <button className="btn-primary text-sm">
-                              Generar QR
+                            <button 
+                              onClick={() => handleGenerateQR(product)}
+                              className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1 rounded text-sm"
+                            >
+                              QR
                             </button>
                           </div>
                         </div>
@@ -574,6 +732,185 @@ export default function ProducerDashboard() {
         fromRole={UserRole.PRODUCER}
         onTransferComplete={handleTransferComplete}
       />
+
+      {/* QR Code Modal */}
+      {showQRModal && selectedProduct && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="text-center">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Código QR del Producto</h3>
+              
+              {/* QR Code Placeholder */}
+              <div className="bg-gray-100 rounded-lg p-8 mb-4">
+                <div className="w-48 h-48 bg-white border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center mx-auto">
+                  <div className="text-center">
+                    <QrCodeIcon className="w-16 h-16 text-gray-400 mx-auto mb-2" />
+                    <p className="text-sm text-gray-500">Código QR para</p>
+                    <p className="text-sm font-medium text-gray-700">{selectedProduct.name}</p>
+                  </div>
+                </div>
+              </div>
+              
+              <p className="text-sm text-gray-600 mb-4">
+                Escanea este código para verificar la autenticidad del producto
+              </p>
+              
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => setShowQRModal(false)}
+                  className="flex-1 btn-secondary"
+                >
+                  Cerrar
+                </button>
+                <button className="flex-1 btn-primary">
+                  Descargar QR
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Product Modal */}
+      {showEditModal && selectedProduct && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Editar Producto</h3>
+              <p className="text-sm text-gray-600">Actualiza la información del producto</p>
+            </div>
+            
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.target as HTMLFormElement);
+              handleUpdateProduct({
+                name: formData.get('name'),
+                description: formData.get('description'),
+                weight: formData.get('weight'),
+                brand: formData.get('brand'),
+                storageConditions: {
+                  temperature: formData.get('temperature'),
+                  humidity: formData.get('humidity')
+                }
+              });
+            }}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
+                  <input
+                    type="text"
+                    name="name"
+                    defaultValue={selectedProduct.name}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Peso (kg)</label>
+                  <input
+                    type="number"
+                    name="weight"
+                    defaultValue={selectedProduct.metadata.weight?.replace('kg', '') || ''}
+                    step="0.1"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Marca</label>
+                  <input
+                    type="text"
+                    name="brand"
+                    defaultValue={selectedProduct.metadata.brand || ''}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Temperatura</label>
+                  <input
+                    type="text"
+                    name="temperature"
+                    defaultValue={selectedProduct.temperature}
+                    placeholder="ej. 4°C"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+                
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
+                  <textarea
+                    name="description"
+                    defaultValue={selectedProduct.metadata.description || ''}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                  />
+                </div>
+              </div>
+              
+              <div className="flex space-x-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEditModal(false);
+                    setSelectedProduct(null);
+                  }}
+                  className="flex-1 btn-secondary"
+                  disabled={isUpdating}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 btn-primary"
+                  disabled={isUpdating}
+                >
+                  {isUpdating ? 'Actualizando...' : 'Guardar Cambios'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && selectedProduct && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <TrashIcon className="w-8 h-8 text-red-600" />
+              </div>
+              
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Eliminar Producto</h3>
+              <p className="text-sm text-gray-600 mb-6">
+                ¿Estás seguro que deseas eliminar "{selectedProduct.name}"? 
+                Esta acción marcará el producto como inactivo pero mantendrá el historial en el blockchain.
+              </p>
+              
+              <div className="flex space-x-3">
+                <button
+                  onClick={() => {
+                    setShowDeleteModal(false);
+                    setSelectedProduct(null);
+                  }}
+                  className="flex-1 btn-secondary"
+                  disabled={isUpdating}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleConfirmDelete}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md"
+                  disabled={isUpdating}
+                >
+                  {isUpdating ? 'Eliminando...' : 'Eliminar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

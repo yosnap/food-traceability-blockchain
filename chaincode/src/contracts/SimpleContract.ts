@@ -61,13 +61,16 @@ export class SimpleContract extends Contract {
         }
 
         // Crear producto simple
+        const timestamp = ctx.stub.getTxTimestamp();
+        const createdAt = new Date(Number(timestamp.seconds) * 1000 + Math.floor(Number(timestamp.nanos) / 1000000)).toISOString();
+        
         const product = {
             id: tokenId,
             owner: ownerAddress,
             name: name,
             amount: amount,
             attributes: attributes,
-            createdAt: new Date().toISOString()
+            createdAt: createdAt
         };
 
         // Guardar
@@ -79,7 +82,7 @@ export class SimpleContract extends Contract {
             ownerAddress,
             name,
             amount,
-            timestamp: new Date().toISOString()
+            timestamp: createdAt
         })));
 
         console.log(`✅ Producto ${tokenId} creado exitosamente`);
@@ -165,13 +168,17 @@ export class SimpleContract extends Contract {
             throw new Error(`Cantidad insuficiente. Disponible: ${product.amount}, Solicitado: ${amount}`);
         }
 
+        // Usar timestamp determinístico
+        const timestamp = ctx.stub.getTxTimestamp();
+        const updatedAt = new Date(Number(timestamp.seconds) * 1000 + Math.floor(Number(timestamp.nanos) / 1000000)).toISOString();
+        
         // Si es transferencia total, eliminar producto original
         if (product.amount === amount) {
             await ctx.stub.deleteState(fromKey);
         } else {
             // Transferencia parcial - reducir cantidad original
             product.amount -= amount;
-            product.updatedAt = new Date().toISOString();
+            product.updatedAt = updatedAt;
             await ctx.stub.putState(fromKey, Buffer.from(JSON.stringify(product)));
         }
 
@@ -186,7 +193,7 @@ export class SimpleContract extends Contract {
             // Agregar cantidad al producto existente
             transferredProduct = JSON.parse(existingToBytes.toString());
             transferredProduct.amount += amount;
-            transferredProduct.updatedAt = new Date().toISOString();
+            transferredProduct.updatedAt = updatedAt;
         } else {
             // Crear nuevo producto para el destinatario
             transferredProduct = {
@@ -196,7 +203,7 @@ export class SimpleContract extends Contract {
                 amount: amount,
                 transferHistory: product.transferHistory || [],
                 createdAt: product.createdAt,
-                updatedAt: new Date().toISOString()
+                updatedAt: updatedAt
             };
         }
 
@@ -207,7 +214,7 @@ export class SimpleContract extends Contract {
             to: toOwner,
             amount: amount,
             transferType: transferType,
-            timestamp: new Date().toISOString(),
+            timestamp: updatedAt,
             notes: notes
         });
 
@@ -221,7 +228,7 @@ export class SimpleContract extends Contract {
             to: toOwner,
             amount,
             transferType,
-            timestamp: new Date().toISOString()
+            timestamp: updatedAt
         })));
 
         console.log(`✅ Producto ${tokenId} transferido exitosamente de ${fromOwner} a ${toOwner}`);

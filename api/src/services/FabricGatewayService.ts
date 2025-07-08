@@ -422,7 +422,7 @@ export class FabricGatewayService {
             }
 
             // Call ping function on SimpleContract
-            const result = await this.contract.evaluateTransaction('SimpleContract:ping');
+            const result = await this.contract.evaluateTransaction('ping');
             const response = new TextDecoder().decode(result);
 
             console.log('✅ Ping exitoso:', response);
@@ -485,7 +485,7 @@ export class FabricGatewayService {
             producerUserId,
             'producer',
             'food',
-            'SimpleContract:createProduct',
+            'createProduct',
             productData.id,           // tokenId
             ownerAddress,             // ownerAddress  
             productData.name,         // name
@@ -527,7 +527,7 @@ export class FabricGatewayService {
             currentOwnerUserId,
             currentOwnerRole,
             'food',
-            'SimpleContract:transferProduct',
+            'transferProduct',
             transferData.tokenId,
             fromOwner,
             transferData.to,
@@ -581,11 +581,31 @@ export class FabricGatewayService {
             'admin',
             'admin',
             'food',
-            'SimpleContract:readProduct',
+            'readProduct',
             id,
             ownerAddress || 'default'
         );
         return JSON.parse(result);
+    }
+
+    /**
+     * Obtiene todos los productos del blockchain
+     */
+    async getAllProducts(): Promise<any[]> {
+        try {
+            const result = await this.evaluateTransactionAsUser(
+                'admin',
+                'admin',
+                'food',
+                'getAllProducts'
+            );
+            const products = JSON.parse(result);
+            console.log(`✅ Obtenidos ${products.length} productos del blockchain`);
+            return products;
+        } catch (error: any) {
+            console.error('❌ Error obteniendo todos los productos:', error.message);
+            return [];
+        }
     }
 
     /**
