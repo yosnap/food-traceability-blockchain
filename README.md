@@ -32,25 +32,60 @@ Productor → Procesador → Distribuidor → Minorista → Consumidor
 - **Database**: CouchDB (integrada con Fabric)
 - **Notifications**: Push notifications + Email alerts
 
-## 🚀 Instalación Rápida
+## 🚀 Instalación y Configuración
+
+### Prerrequisitos
+- **Node.js** 18.x o superior
+- **npm** 9.x o superior
+- **Docker** y **Docker Compose**
+- **MetaMask** (extensión del navegador)
+
+### Instalación
 
 ```bash
 # 1. Clonar repositorio
-git clone https://github.com/tu-usuario/food-traceability-blockchain.git
+git clone https://github.com/codecrypto-academy/pfm-traza-hlf-2025.git
 cd food-traceability-blockchain
 
 # 2. Instalar dependencias
-npm run install-all
+# API
+cd api && npm install
 
-# 3. Configurar Hyperledger Fabric
-./scripts/setup/setup-fabric.sh
+# Frontend
+cd ../web && npm install
 
-# 4. Desplegar chaincode
-./scripts/setup/deploy-chaincode.sh
-
-# 5. Iniciar servicios
-npm run dev
+# Chaincode
+cd ../chaincode && npm install
 ```
+
+### Inicio Rápido - Levantar Todo el Sistema
+
+```bash
+# Desde el directorio raíz del proyecto
+./scripts/launch-fabric.sh
+```
+
+Este script automáticamente:
+- ✅ Levanta la red Hyperledger Fabric con docker-compose
+- ✅ Crea el canal `mychannel`
+- ✅ Despliega el chaincode `food-traceability` con política `OR('Org1MSP.member')`
+- ✅ Inicia la API en puerto 3001
+- ✅ Inicia el Frontend en puerto 3000
+
+### Detener Todo el Sistema
+
+```bash
+# Desde el directorio raíz del proyecto
+./scripts/stop-all.sh
+```
+
+### Acceso a la Aplicación
+
+Una vez levantado el sistema:
+
+- **🌐 Aplicación Web**: http://localhost:3000
+- **🔌 API Backend**: http://localhost:3001
+- **📊 Health Check**: http://localhost:3001/api/health
 
 ## 📱 Funcionalidades de la App Móvil
 

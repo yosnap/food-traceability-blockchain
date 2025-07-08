@@ -169,7 +169,42 @@ function getMockUser(token: string) {
         }
     };
 
+    // Verificar si es un token de MetaMask
+    if (token.startsWith('metamask_')) {
+        return handleMetaMaskToken(token);
+    }
+
     return mockUsers[token] || null;
+}
+
+/**
+ * Manejar tokens de MetaMask
+ */
+function handleMetaMaskToken(token: string) {
+    // Formato: metamask_0x{address}_{timestamp} o metamask_0x{address}
+    const parts = token.split('_');
+    if (parts.length < 2) return null;
+    
+    const address = parts[1];
+    console.log('🦊 Procesando token MetaMask:', { token, address });
+    
+    // Validar formato de dirección Ethereum
+    if (!address.startsWith('0x') || address.length < 10) {
+        console.log('❌ Dirección MetaMask inválida:', address);
+        return null;
+    }
+    
+    // Para desarrollo, aceptar cualquier dirección de MetaMask como PRODUCER
+    // En producción, esto debería verificarse en una base de datos
+    return {
+        address: address,
+        role: 'PRODUCER', // Por defecto, asignar rol PRODUCER
+        name: `Usuario MetaMask (${address.slice(0, 6)}...${address.slice(-4)})`,
+        isVerified: true,
+        fabricUserId: `metamask_${address}`,
+        mspId: 'Org1MSP',
+        organizationName: 'org1.example.com'
+    };
 }
 
 /**

@@ -134,6 +134,44 @@ export class SimpleContract extends Contract {
     }
 
     /**
+     * Obtener productos por propietario
+     */
+    @Transaction(false)
+    @Returns('string')
+    public async getProductsByOwner(ctx: Context, ownerAddress: string): Promise<string> {
+        console.log(`🔍 Buscando productos para propietario: ${ownerAddress}`);
+        
+        if (!ownerAddress) {
+            throw new Error('Dirección del propietario requerida');
+        }
+
+        const iterator = await ctx.stub.getStateByRange('product:', 'product:~');
+        const products = [];
+
+        while (true) {
+            const result = await iterator.next();
+            if (result.value && result.value.value.toString()) {
+                try {
+                    const product = JSON.parse(result.value.value.toString());
+                    // Filtrar productos que pertenecen al propietario
+                    if (product.owner === ownerAddress) {
+                        products.push(product);
+                    }
+                } catch (error) {
+                    console.log('Error parsing product:', error);
+                }
+            }
+            if (result.done) {
+                await iterator.close();
+                break;
+            }
+        }
+
+        console.log(`✅ Encontrados ${products.length} productos para ${ownerAddress}`);
+        return JSON.stringify(products);
+    }
+
+    /**
      * Transferir producto entre organizaciones
      */
     @Transaction()
