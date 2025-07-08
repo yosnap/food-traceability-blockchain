@@ -283,29 +283,35 @@ export class FoodController {
      */
     static async getMyProducts(req: Request, res: Response, next: NextFunction): Promise<void> {
         try {
-            const userAddress = req.user?.address;
-            if (!userAddress) {
-                res.status(400).json({
+            // Solo verificar que el usuario esté autenticado (wallet conectada)
+            const authenticatedUser = (req as any).user;
+            if (!authenticatedUser) {
+                res.status(401).json({
                     success: false,
                     error: {
-                        message: 'Usuario no identificado',
-                        code: 'USER_NOT_IDENTIFIED',
+                        message: 'Usuario no autenticado',
+                        code: 'USER_NOT_AUTHENTICATED',
                         timestamp: new Date().toISOString()
                     }
                 });
                 return;
             }
 
-            // TODO: Implementar consulta de productos por propietario en FabricService
-            // Por ahora, usar getExpiringProducts con un rango amplio
-            const allProducts = await fabricGatewayService.getExpiringProducts(365, userAddress);
+            console.log('🔧 Autenticado como:', authenticatedUser.name || 'Usuario', `(${authenticatedUser.role || 'sin rol'})`);
+            
+            // Obtener TODOS los productos del sistema (sin filtrar por usuario)
+            console.log('🔍 Obteniendo todos los productos del sistema...');
+            const allProducts = await fabricGatewayService.getAllProducts();
 
             res.json({
                 success: true,
-                data: {
-                    products: allProducts,
-                    count: allProducts.length,
-                    owner: userAddress
+                message: 'Productos obtenidos exitosamente',
+                data: allProducts,
+                owner: {
+                    userId: authenticatedUser.fabricUserId || authenticatedUser.userId,
+                    name: authenticatedUser.name,
+                    role: authenticatedUser.role,
+                    address: authenticatedUser.address
                 },
                 timestamp: new Date().toISOString()
             });

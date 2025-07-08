@@ -308,20 +308,14 @@ router.get('/products', devModeAuth, async (req: Request, res: Response) => {
         console.log(`🔧 Obteniendo productos para usuario: ${user.userId} (${user.role})`);
 
         try {
-            // Intentar obtener productos del usuario actual
-            const result = await fabricGatewayService.evaluateTransactionAsUser(
-                user.userId,
-                user.role,
-                'food',
-                'getProductsByOwner',
-                user.address // Usar la dirección blockchain del usuario
-            );
+            // Obtener TODOS los productos del sistema (enfoque Web3)
+            const result = await fabricGatewayService.getAllProducts();
 
-            const products = JSON.parse(result);
+            const products = result; // getAllProducts ya devuelve un array parseado
 
             res.json({
                 success: true,
-                message: 'Productos del usuario obtenidos exitosamente',
+                message: 'Productos obtenidos exitosamente',
                 data: products,
                 owner: {
                     userId: user.userId,
@@ -333,12 +327,12 @@ router.get('/products', devModeAuth, async (req: Request, res: Response) => {
             });
 
         } catch (chainError: any) {
-            console.log('⚠️ Error en chaincode (LevelDB limitation):', chainError.message);
+            console.log('⚠️ Error obteniendo productos:', chainError.message);
             
-            // Devolver array vacío para que el usuario pueda crear productos reales
+            // Si hay error, devolver array vacío
             res.json({
                 success: true,
-                message: 'No hay productos aún. Crea tu primer producto.',
+                message: 'No hay productos aún o error al obtenerlos.',
                 data: [],
                 owner: {
                     userId: user.userId,
@@ -346,7 +340,6 @@ router.get('/products', devModeAuth, async (req: Request, res: Response) => {
                     role: user.role,
                     address: user.address
                 },
-                note: 'LevelDB no soporta consultas complejas. Los productos se almacenan pero requieren consultas por ID individual.',
                 timestamp: new Date().toISOString()
             });
             return;

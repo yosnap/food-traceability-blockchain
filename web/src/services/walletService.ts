@@ -267,7 +267,15 @@ export class WalletService {
         }
 
         try {
-            // Solicitar permisos para conectar
+            // Solicitar permisos mostrando el modal de selección de cuentas
+            await window.ethereum.request({
+                method: 'wallet_requestPermissions',
+                params: [{
+                    eth_accounts: {}
+                }]
+            });
+
+            // Después de seleccionar, obtener las cuentas
             const accounts = await window.ethereum.request({
                 method: 'eth_requestAccounts'
             });
