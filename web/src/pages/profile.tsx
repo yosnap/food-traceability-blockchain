@@ -26,6 +26,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { walletService } from '@/services/walletService';
 import { getRoleLabel, getRoleColor, truncateAddress } from '@/utils/helpers';
 import { UserRole } from '@/types';
+import Breadcrumb from '@/components/Breadcrumb';
 
 interface UserInfo {
   address: string;
@@ -206,25 +207,44 @@ export default function ProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Cargando perfil...</p>
+      <>
+        <Head>
+          <title>Mi Perfil - Food Traceability</title>
+          <meta name="description" content="Información del perfil de usuario y configuración" />
+        </Head>
+        
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Cargando Perfil</h2>
+            <p className="text-gray-600">Obteniendo información del usuario y configuración...</p>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
   if (!userInfo) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-gray-600">No se pudo cargar la información del usuario</p>
-          <Link href="/auth" className="btn-primary mt-4">
-            Volver al Login
-          </Link>
+      <>
+        <Head>
+          <title>Mi Perfil - Food Traceability</title>
+          <meta name="description" content="Información del perfil de usuario y configuración" />
+        </Head>
+        
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-center">
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <XCircleIcon className="w-8 h-8 text-red-600" />
+            </div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Error al Cargar Perfil</h2>
+            <p className="text-gray-600 mb-4">No se pudo cargar la información del usuario</p>
+            <Link href="/auth" className="btn-primary">
+              Volver al Login
+            </Link>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
@@ -272,6 +292,15 @@ export default function ProfilePage() {
 
         <main className="py-8">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+            {/* Breadcrumb */}
+            <div className="mb-6">
+              <Breadcrumb 
+                items={[
+                  { label: 'Dashboard', href: getDashboardLink(userInfo.role) },
+                  { label: 'Mi Perfil', current: true }
+                ]}
+              />
+            </div>
             
             {/* Información Básica del Usuario */}
             <div className="card">
