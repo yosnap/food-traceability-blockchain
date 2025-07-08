@@ -15,16 +15,19 @@ import {
   CalendarIcon,
   MapPinIcon,
   CogIcon,
-  BeakerIcon
+  BeakerIcon,
+  QrCodeIcon,
+  PencilIcon,
+  TrashIcon
 } from '@heroicons/react/24/outline';
 import { useAuth } from '@/hooks/useAuth';
-import { api } from '@/utils/api';
 import { Product, ProductStatus, UserRole } from '@/types';
 import SafeDate from '@/components/SafeDate';
 import TransferModal from '@/components/TransferModal';
 import NotificationBell from '@/components/NotificationBell';
 import { useNotifications } from '@/hooks/useNotifications';
-import { generateTestExpirationDates, calculateExpirationInfo } from '@/utils/expirationUtils';
+import { calculateExpirationInfo } from '@/utils/expirationUtils';
+import Breadcrumb from '@/components/Breadcrumb';
 
 interface ProcessorStats {
   totalBatches: number;
@@ -33,113 +36,13 @@ interface ProcessorStats {
   rawMaterials: number;
 }
 
-const mockStats: ProcessorStats = {
-  totalBatches: 28,
-  activeProcessing: 12,
-  readyProducts: 16,
-  rawMaterials: 45
-};
-
-// Generar fechas de vencimiento variadas para testing
-const testDates = generateTestExpirationDates();
-
-const mockProducts: Product[] = [
-  {
-    id: 'proc-001',
-    name: 'Jugo de Naranja Pasteurizado',
-    batchNumber: 'PROC-2025-001',
-    productionDate: '2025-01-29',
-    expirationDate: testDates.today, // Vence hoy
-    status: ProductStatus.ACTIVE,
-    currentLocation: 'Planta Procesadora Central - Línea A',
-    temperature: 4,
-    humidity: 70,
-    producer: {
-      id: 'processor-001',
-      name: 'Procesadora Valle Verde',
-      location: 'Zona Industrial, San José'
-    },
-    metadata: {
-      variety: 'Pasteurizado',
-      weight: '500L',
-      certification: 'HACCP',
-      harvestDate: '2025-01-28'
-    }
-  },
-  {
-    id: 'proc-002',
-    name: 'Yogurt Natural Procesado',
-    batchNumber: 'PROC-2025-002',
-    productionDate: '2025-01-27',
-    expirationDate: testDates.threeDays, // Vence en 3 días
-    status: ProductStatus.ACTIVE,
-    currentLocation: 'Cámara de Refrigeración B',
-    temperature: 2,
-    humidity: 80,
-    producer: {
-      id: 'processor-001',
-      name: 'Procesadora Valle Verde',
-      location: 'Zona Industrial, San José'
-    },
-    metadata: {
-      variety: 'Natural',
-      weight: '200kg',
-      certification: 'HACCP',
-      harvestDate: '2025-01-25'
-    }
-  },
-  {
-    id: 'proc-003',
-    name: 'Café Molido Premium',
-    batchNumber: 'PROC-2025-003',
-    productionDate: '2025-01-18',
-    expirationDate: testDates.oneMonth, // Vence en 1 mes
-    status: ProductStatus.IN_TRANSIT,
-    currentLocation: 'Almacén de Distribución',
-    temperature: 20,
-    humidity: 40,
-    producer: {
-      id: 'processor-001',
-      name: 'Procesadora Valle Verde',
-      location: 'Zona Industrial, San José'
-    },
-    metadata: {
-      variety: 'Arábica Molido',
-      weight: '500kg',
-      certification: 'Orgánico',
-      harvestDate: '2025-01-05'
-    }
-  },
-  {
-    id: 'proc-004',
-    name: 'Salsa de Tomate Concentrada',
-    batchNumber: 'PROC-2025-004',
-    productionDate: '2025-01-28',
-    expirationDate: testDates.oneWeek, // Vence en 1 semana
-    status: ProductStatus.ACTIVE,
-    currentLocation: 'Área de Envasado - Línea C',
-    temperature: 18,
-    humidity: 60,
-    producer: {
-      id: 'processor-001',
-      name: 'Procesadora Valle Verde',
-      location: 'Zona Industrial, San José'
-    },
-    metadata: {
-      variety: 'Concentrada',
-      weight: '300kg',
-      certification: 'HACCP',
-      harvestDate: '2025-01-26'
-    }
-  }
-];
-
 export default function ProcessorDashboard() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuth();
-  const [stats, setStats] = useState<ProcessorStats>(mockStats);
+  const [stats, setStats] = useState<ProcessorStats>({ totalBatches: 0, activeProcessing: 0, readyProducts: 0, rawMaterials: 0 });
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [showTransferModal, setShowTransferModal] = useState(false);
@@ -154,19 +57,35 @@ export default function ProcessorDashboard() {
   } = useNotifications(products);
 
   useEffect(() => {
+    let timeoutId: NodeJS.Timeout | null = null;
+    let mounted = true;
+    
     // Simplified auth check
     if (typeof window !== 'undefined') {
       const storedRole = localStorage.getItem('userRole');
       const storedUser = localStorage.getItem('authUser');
+      const storedToken = localStorage.getItem('authToken');
       
-      if (!storedRole || !storedUser) {
-        router.push('/auth');
+      console.log('🔍 Dashboard auth check:', {
+        hasRole: !!storedRole,
+        hasUser: !!storedUser,
+        hasToken: !!storedToken,
+        role: storedRole
+      });
+      
+      if (!storedRole || !storedUser || !storedToken) {
+        console.log('❌ Missing auth data, redirecting to login');
+        if (mounted) {
+          router.push('/auth');
+        }
         return;
       }
       
       if (storedRole !== UserRole.PROCESSOR) {
-        toast.error('Acceso denegado: Se requiere rol de Procesador');
-        router.push('/auth');
+        if (mounted) {
+          toast.error('Acceso denegado: Se requiere rol de Procesador');
+          router.push('/auth');
+        }
         return;
       }
       
@@ -178,18 +97,95 @@ export default function ProcessorDashboard() {
       }
     }
     
-    loadDashboardData();
+    // Load data with a small delay to avoid multiple calls
+    timeoutId = setTimeout(() => {
+      if (mounted) {
+        loadDashboardData();
+      }
+    }, 100);
+    
+    return () => {
+      mounted = false;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
   }, []);
 
   const loadDashboardData = async () => {
     setIsLoading(true);
     try {
-      toast.success('Dashboard actualizado');
-    } catch (error) {
-      toast.error('Error al cargar datos del dashboard');
-      console.error('Dashboard error:', error);
+      console.log('🔄 Cargando datos del dashboard de procesador...');
+      
+      // Importar funciones de API para cargar productos reales
+      const { getMyProducts } = await import('@/utils/api');
+      
+      // Cargar productos del usuario autenticado
+      const productsResponse = await getMyProducts();
+      
+      if (productsResponse.success && productsResponse.data) {
+        console.log('✅ Productos cargados:', productsResponse.data);
+        
+        // Convertir FoodAsset[] a Product[] para compatibilidad con la UI
+        const convertedProducts = productsResponse.data.map((foodAsset: any) => ({
+          id: foodAsset.id,
+          name: foodAsset.name,
+          batchNumber: foodAsset.batchNumber || foodAsset.attributes?.batchNumber,
+          productionDate: foodAsset.productionDate || foodAsset.attributes?.productionDate,
+          expirationDate: foodAsset.expirationDate || foodAsset.attributes?.expirationDate,
+          status: foodAsset.status || ProductStatus.ACTIVE,
+          currentLocation: foodAsset.origin?.farmName || foodAsset.attributes?.origin?.farmName || 'Planta de Procesamiento',
+          temperature: foodAsset.storageConditions?.temperature || foodAsset.attributes?.storageConditions?.temperature || 2,
+          humidity: foodAsset.storageConditions?.humidity || foodAsset.attributes?.storageConditions?.humidity || 80,
+          producer: {
+            id: 'current-processor',
+            name: foodAsset.origin?.farmName || foodAsset.attributes?.origin?.farmName || 'Procesadora Valle Verde',
+            location: foodAsset.origin?.location || foodAsset.attributes?.origin?.location || 'Zona Industrial, San José'
+          },
+          metadata: {
+            variety: foodAsset.variety || foodAsset.attributes?.variety || 'Procesado',
+            weight: foodAsset.weight ? `${foodAsset.weight}kg` : (foodAsset.attributes?.weight ? `${foodAsset.attributes.weight}kg` : 'Sin especificar'),
+            certification: foodAsset.certifications?.join(', ') || foodAsset.attributes?.certifications?.join(', ') || 'HACCP',
+            harvestDate: foodAsset.productionDate || foodAsset.attributes?.productionDate,
+            description: foodAsset.description || foodAsset.attributes?.description || 'Producto procesado',
+            brand: foodAsset.brand || foodAsset.attributes?.brand || 'Valle Verde',
+            category: foodAsset.category || foodAsset.attributes?.category || 'PROCESSED'
+          }
+        }));
+        
+        // Ensure unique products by ID to avoid duplicate keys
+        const uniqueProducts = convertedProducts.filter((product, index, array) => 
+          index === array.findIndex(p => p.id === product.id)
+        );
+        setProducts(uniqueProducts);
+        
+        // Calcular estadísticas básicas
+        const totalBatches = uniqueProducts.length;
+        const activeProcessing = uniqueProducts.filter(p => p.status === ProductStatus.ACTIVE).length;
+        const readyProducts = uniqueProducts.filter(p => p.status === ProductStatus.IN_TRANSIT).length;
+        const rawMaterials = Math.floor(totalBatches * 1.5); // Estimación
+        
+        setStats({
+          totalBatches,
+          activeProcessing,
+          readyProducts,
+          rawMaterials
+        });
+        
+        toast.success(`Dashboard actualizado - ${totalBatches} lotes procesados cargados`, { id: 'dashboard-load' });
+      } else {
+        console.log('ℹ️ No se encontraron productos procesados');
+        setProducts([]);
+        toast.info('No hay productos procesados registrados.', { id: 'dashboard-empty' });
+      }
+      
+    } catch (error: any) {
+      console.error('❌ Error al cargar datos del dashboard:', error);
+      toast.error(`Error al cargar datos: ${error.message}`, { id: 'dashboard-error' });
+      setProducts([]);
     } finally {
       setIsLoading(false);
+      setIsInitialLoad(false);
     }
   };
 
@@ -266,7 +262,30 @@ export default function ProcessorDashboard() {
       activeProcessing: prevStats.activeProcessing - 1,
       readyProducts: prevStats.readyProducts + 1
     }));
+
+    toast.success(`Producto procesado "${product.name}" transferido exitosamente a ${recipient.name}`, { id: 'transfer-success' });
+    setShowTransferModal(false);
+    setSelectedProduct(null);
   };
+
+  if (isInitialLoad) {
+    return (
+      <>
+        <Head>
+          <title>Dashboard Procesador - Food Traceability</title>
+          <meta name="description" content="Panel de control para procesadores de alimentos" />
+        </Head>
+        
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-purple-600 mx-auto mb-4"></div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Cargando Dashboard</h2>
+            <p className="text-gray-600">Conectando con el blockchain y cargando tus productos procesados...</p>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -287,8 +306,8 @@ export default function ProcessorDashboard() {
                 </Link>
                 
                 <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                    <span className="text-white font-bold">🏭</span>
+                  <div className="w-8 h-8 bg-purple-600 rounded-lg flex items-center justify-center">
+                    <BeakerIcon className="w-5 h-5 text-white" />
                   </div>
                   <div>
                     <h1 className="text-lg font-semibold text-gray-900">Panel Procesador</h1>
@@ -313,6 +332,10 @@ export default function ProcessorDashboard() {
                   {isLoading ? 'Actualizando...' : 'Actualizar'}
                 </button>
                 
+                <Link href="/profile" className="btn-secondary">
+                  Mi Perfil
+                </Link>
+                
                 <Link href="/auth" className="btn-primary">
                   Cambiar Usuario
                 </Link>
@@ -323,13 +346,22 @@ export default function ProcessorDashboard() {
 
         <main className="py-8">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            {/* Breadcrumb */}
+            <div className="mb-6">
+              <Breadcrumb 
+                items={[
+                  { label: 'Dashboard Procesador', current: true }
+                ]}
+              />
+            </div>
+
             {/* Welcome Section */}
             <div className="mb-8">
               <h2 className="text-2xl font-bold text-gray-900 mb-2">
                 ¡Bienvenido, {currentUser?.name || 'Procesador'}!
               </h2>
               <p className="text-gray-600">
-                Gestiona el procesamiento de materias primas y controla la producción
+                Gestiona el procesamiento de materias primas y controla la producción de alimentos procesados
               </p>
             </div>
 
@@ -337,8 +369,8 @@ export default function ProcessorDashboard() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
               <div className="card">
                 <div className="flex items-center">
-                  <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <BeakerIcon className="w-6 h-6 text-blue-600" />
+                  <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                    <BeakerIcon className="w-6 h-6 text-purple-600" />
                   </div>
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-600">Total Lotes</p>
@@ -373,8 +405,8 @@ export default function ProcessorDashboard() {
 
               <div className="card">
                 <div className="flex items-center">
-                  <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                    <DocumentTextIcon className="w-6 h-6 text-purple-600" />
+                  <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <DocumentTextIcon className="w-6 h-6 text-blue-600" />
                   </div>
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-600">Materias Primas</p>
@@ -385,7 +417,7 @@ export default function ProcessorDashboard() {
             </div>
 
             {/* Actions Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
               <div className="card hover:shadow-lg transition-shadow cursor-pointer">
                 <div className="text-center">
                   <div className="w-16 h-16 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-4">
@@ -396,25 +428,35 @@ export default function ProcessorDashboard() {
                 </div>
               </div>
 
-              <div className="card hover:shadow-lg transition-shadow cursor-pointer">
+              <Link href="/processor/transfer" className="card hover:shadow-lg transition-shadow cursor-pointer">
                 <div className="text-center">
                   <div className="w-16 h-16 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-                    <CheckCircleIcon className="w-8 h-8 text-green-600" />
+                    <ArrowRightIcon className="w-8 h-8 text-green-600" />
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Finalizar Lote</h3>
-                  <p className="text-gray-600 text-sm">Completar y registrar productos terminados</p>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Transferir Productos</h3>
+                  <p className="text-gray-600 text-sm">Enviar productos procesados a distribuidores</p>
                 </div>
-              </div>
+              </Link>
 
-              <div className="card hover:shadow-lg transition-shadow cursor-pointer">
+              <Link href="/processor/reports" className="card hover:shadow-lg transition-shadow cursor-pointer">
                 <div className="text-center">
                   <div className="w-16 h-16 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-4">
                     <DocumentTextIcon className="w-8 h-8 text-purple-600" />
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Control de Calidad</h3>
-                  <p className="text-gray-600 text-sm">Verificar estándares y certificaciones</p>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Reportes</h3>
+                  <p className="text-gray-600 text-sm">Ver estadísticas y métricas de calidad</p>
                 </div>
-              </div>
+              </Link>
+
+              <Link href="/profile" className="card hover:shadow-lg transition-shadow cursor-pointer">
+                <div className="text-center">
+                  <div className="w-16 h-16 bg-indigo-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+                    <CogIcon className="w-8 h-8 text-indigo-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Mi Perfil</h3>
+                  <p className="text-gray-600 text-sm">Configuración y certificado X.509</p>
+                </div>
+              </Link>
             </div>
 
             {/* Products Section */}
@@ -428,7 +470,7 @@ export default function ProcessorDashboard() {
                   </div>
                   <input
                     type="text"
-                    placeholder="Buscar productos..."
+                    placeholder="Buscar productos procesados..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
@@ -437,60 +479,91 @@ export default function ProcessorDashboard() {
               </div>
 
               <div className="space-y-4">
-                {filteredProducts.map((product) => (
-                  <div key={product.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-3 mb-2">
-                          <h4 className="text-lg font-medium text-gray-900">{product.name}</h4>
-                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(product.status)}`}>
-                            {getStatusIcon(product.status)}
-                            <span className="ml-1">{product.status}</span>
-                          </span>
-                        </div>
+                {filteredProducts.map((product) => {
+                  const expirationInfo = calculateExpirationInfo(product);
+                  
+                  return (
+                    <div 
+                      key={product.id} 
+                      className={`border rounded-lg p-4 hover:shadow-md transition-shadow ${
+                        expirationInfo.urgencyLevel === 'critical' 
+                          ? 'border-red-300 bg-red-50' 
+                          : expirationInfo.urgencyLevel === 'warning'
+                          ? 'border-orange-300 bg-orange-50'
+                          : 'border-gray-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-3 mb-2">
+                            <BeakerIcon className="w-5 h-5 text-purple-600" />
+                            <h4 className="text-lg font-medium text-gray-900">{product.name}</h4>
+                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(product.status)}`}>
+                              {getStatusIcon(product.status)}
+                              <span className="ml-1">{product.status}</span>
+                            </span>
+                            
+                            {expirationInfo.urgencyLevel !== 'normal' && (
+                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${expirationInfo.urgencyColor} ${
+                                expirationInfo.urgencyLevel === 'critical' ? 'animate-pulse' : ''
+                              }`}>
+                                {expirationInfo.urgencyLevel === 'critical' && <ExclamationTriangleIcon className="w-3 h-3 mr-1" />}
+                                {expirationInfo.urgencyLevel === 'warning' && <ClockIcon className="w-3 h-3 mr-1" />}
+                                {expirationInfo.urgencyMessage}
+                              </span>
+                            )}
+                          </div>
                         
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
-                          <div className="flex items-center">
-                            <DocumentTextIcon className="w-4 h-4 mr-2" />
-                            <span>{product.batchNumber}</span>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
+                            <div className="flex items-center">
+                              <QrCodeIcon className="w-4 h-4 mr-2" />
+                              <span>{product.batchNumber}</span>
+                            </div>
+                            <div className="flex items-center">
+                              <CalendarIcon className="w-4 h-4 mr-2" />
+                              <span>Vence: <SafeDate date={product.expirationDate} /></span>
+                            </div>
+                            <div className="flex items-center">
+                              <MapPinIcon className="w-4 h-4 mr-2" />
+                              <span>{product.currentLocation}</span>
+                            </div>
                           </div>
-                          <div className="flex items-center">
-                            <CalendarIcon className="w-4 h-4 mr-2" />
-                            <span>Vence: <SafeDate date={product.expirationDate} /></span>
-                          </div>
-                          <div className="flex items-center">
-                            <MapPinIcon className="w-4 h-4 mr-2" />
-                            <span>{product.currentLocation}</span>
+
+                          <div className="mt-2 text-sm text-gray-500">
+                            <span className="mr-4">Peso: {product.metadata.weight}</span>
+                            <span className="mr-4">Temp: {product.temperature}°C</span>
+                            <span className="mr-4">Humedad: {product.humidity}%</span>
+                            <span>Certificación: {product.metadata.certification}</span>
                           </div>
                         </div>
 
-                        <div className="mt-2 text-sm text-gray-500">
-                          <span className="mr-4">Cantidad: {product.metadata.weight}</span>
-                          <span className="mr-4">Temp: {product.temperature}°C</span>
-                          <span>Certificación: {product.metadata.certification}</span>
+                        <div className="flex items-center space-x-2">
+                          <button className="btn-secondary text-sm">
+                            Ver Detalles
+                          </button>
+                          <button 
+                            onClick={() => handleTransferClick(product)}
+                            disabled={!expirationInfo.canTransfer}
+                            className={`px-3 py-1 rounded text-sm transition-colors ${
+                              expirationInfo.canTransfer
+                                ? 'bg-purple-600 hover:bg-purple-700 text-white'
+                                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                            }`}
+                            title={!expirationInfo.canTransfer ? 'No se puede transferir producto vencido' : ''}
+                          >
+                            Transferir
+                          </button>
                         </div>
-                      </div>
-
-                      <div className="flex items-center space-x-2">
-                        <button className="btn-secondary text-sm">
-                          Ver Detalles
-                        </button>
-                        <button 
-                          onClick={() => handleTransferClick(product)}
-                          className="btn-primary text-sm"
-                        >
-                          Transferir
-                        </button>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {filteredProducts.length === 0 && (
                 <div className="text-center py-8">
                   <BeakerIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">No hay productos</h3>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No hay productos procesados</h3>
                   <p className="text-gray-600 mb-4">
                     {searchTerm ? 'No se encontraron productos con ese término' : 'Aún no has procesado ningún producto'}
                   </p>

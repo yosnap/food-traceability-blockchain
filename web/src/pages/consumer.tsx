@@ -17,12 +17,17 @@ import {
   StarIcon,
   BellIcon,
   CameraIcon,
-  InformationCircleIcon
+  InformationCircleIcon,
+  CogIcon,
+  UserIcon
 } from '@heroicons/react/24/outline';
 import { useAuth } from '@/hooks/useAuth';
-import { api } from '@/utils/api';
 import { Product, ProductStatus, UserRole } from '@/types';
 import SafeDate from '@/components/SafeDate';
+import NotificationBell from '@/components/NotificationBell';
+import { useNotifications } from '@/hooks/useNotifications';
+import { calculateExpirationInfo } from '@/utils/expirationUtils';
+import Breadcrumb from '@/components/Breadcrumb';
 
 interface ConsumerStats {
   scannedProducts: number;
@@ -31,84 +36,57 @@ interface ConsumerStats {
   savedProducts: number;
 }
 
-const mockStats: ConsumerStats = {
-  scannedProducts: 15,
-  trackedProducts: 8,
-  notifications: 3,
-  savedProducts: 12
-};
-
-const mockProducts: Product[] = [
-  {
-    id: 'cons-001',
-    name: 'Manzanas Red Delicious',
-    batchNumber: 'PROD-2025-001',
-    productionDate: '2025-01-15',
-    expirationDate: '2025-02-14',
-    status: ProductStatus.ACTIVE,
-    currentLocation: 'Tu Hogar',
-    temperature: 4,
-    humidity: 85,
-    producer: {
-      id: 'producer-001',
-      name: 'Finca San Pedro',
-      location: 'Valle Central, Costa Rica'
-    },
-    metadata: {
-      variety: 'Red Delicious',
-      weight: '1kg',
-      certification: 'Orgánico',
-      harvestDate: '2025-01-15'
-    }
-  },
-  {
-    id: 'cons-002',
-    name: 'Leche Pasteurizada',
-    batchNumber: 'DAIRY-2025-005',
-    productionDate: '2025-01-25',
-    expirationDate: '2025-02-01',
-    status: ProductStatus.ACTIVE,
-    currentLocation: 'Refrigerador',
-    temperature: 2,
-    humidity: 60,
-    producer: {
-      id: 'dairy-001',
-      name: 'Lácteos del Valle',
-      location: 'Cartago, Costa Rica'
-    },
-    metadata: {
-      variety: 'Pasteurizada',
-      weight: '1L',
-      certification: 'HACCP',
-      harvestDate: '2025-01-24'
-    }
-  }
-];
+// Datos reales del blockchain - sin mock data
 
 export default function ConsumerDashboard() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuth();
-  const [stats, setStats] = useState<ConsumerStats>(mockStats);
+  const [stats, setStats] = useState<ConsumerStats>({ scannedProducts: 0, trackedProducts: 0, notifications: 0, savedProducts: 0 });
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showScanner, setShowScanner] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  
+  // Hook de notificaciones
+  const {
+    notifications,
+    stats: notificationStats,
+    markAsRead,
+    markAllAsRead
+  } = useNotifications(products);
 
   useEffect(() => {
+    let timeoutId: NodeJS.Timeout | null = null;
+    let mounted = true;
+    
     // Simplified auth check
     if (typeof window !== 'undefined') {
       const storedRole = localStorage.getItem('userRole');
       const storedUser = localStorage.getItem('authUser');
+      const storedToken = localStorage.getItem('authToken');
       
-      if (!storedRole || !storedUser) {
-        router.push('/auth');
+      console.log('🔍 Dashboard auth check:', {
+        hasRole: !!storedRole,
+        hasUser: !!storedUser,
+        hasToken: !!storedToken,
+        role: storedRole
+      });
+      
+      if (!storedRole || !storedUser || !storedToken) {
+        console.log('❌ Missing auth data, redirecting to login');
+        if (mounted) {
+          router.push('/auth');
+        }
         return;
       }
       
       if (storedRole !== UserRole.CONSUMER) {
-        toast.error('Acceso denegado: Se requiere rol de Consumidor');
-        router.push('/auth');
+        if (mounted) {
+          toast.error('Acceso denegado: Se requiere rol de Consumidor');
+          router.push('/auth');
+        }
         return;
       }
       
@@ -120,18 +98,98 @@ export default function ConsumerDashboard() {
       }
     }
     
-    loadDashboardData();
+    // Load data with a small delay to avoid multiple calls
+    timeoutId = setTimeout(() => {
+      if (mounted) {
+        loadDashboardData();
+      }
+    }, 100);
+    
+    return () => {
+      mounted = false;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
   }, []);
 
   const loadDashboardData = async () => {
     setIsLoading(true);
     try {
-      toast.success('Dashboard actualizado');
-    } catch (error) {
-      toast.error('Error al cargar datos del dashboard');
-      console.error('Dashboard error:', error);
+      console.log('🔄 Cargando datos del dashboard de consumidor...');
+      
+      // Importar funciones de API para cargar productos reales
+      const { getMyProducts } = await import('@/utils/api');
+      
+      // Cargar productos disponibles que el consumidor puede rastrear
+      const productsResponse = await getMyProducts();
+      
+      if (productsResponse.success && productsResponse.data) {
+        console.log('✅ Productos cargados:', productsResponse.data);
+        
+        // Convertir FoodAsset[] a Product[] para compatibilidad con la UI
+        const convertedProducts = productsResponse.data.map((foodAsset: any) => ({
+          id: foodAsset.id,
+          name: foodAsset.name,
+          batchNumber: foodAsset.batchNumber || foodAsset.attributes?.batchNumber,
+          productionDate: foodAsset.productionDate || foodAsset.attributes?.productionDate,
+          expirationDate: foodAsset.expirationDate || foodAsset.attributes?.expirationDate,
+          status: foodAsset.status || ProductStatus.ACTIVE,
+          currentLocation: foodAsset.origin?.farmName || foodAsset.attributes?.origin?.farmName || 'Mi Hogar',
+          temperature: foodAsset.storageConditions?.temperature || foodAsset.attributes?.storageConditions?.temperature || 8,
+          humidity: foodAsset.storageConditions?.humidity || foodAsset.attributes?.storageConditions?.humidity || 65,
+          producer: {
+            id: 'current-consumer',
+            name: foodAsset.origin?.farmName || foodAsset.attributes?.origin?.farmName || 'Consumidor Final',
+            location: foodAsset.origin?.location || foodAsset.attributes?.origin?.location || 'Casa del Consumidor'
+          },
+          metadata: {
+            variety: foodAsset.variety || foodAsset.attributes?.variety || 'Consumo directo',
+            weight: foodAsset.weight ? `${foodAsset.weight}kg` : (foodAsset.attributes?.weight ? `${foodAsset.attributes.weight}kg` : 'Sin especificar'),
+            certification: foodAsset.certifications?.join(', ') || foodAsset.attributes?.certifications?.join(', ') || 'Consumo seguro',
+            harvestDate: foodAsset.productionDate || foodAsset.attributes?.productionDate,
+            description: foodAsset.description || foodAsset.attributes?.description || 'Producto para consumo',
+            brand: foodAsset.brand || foodAsset.attributes?.brand || 'Consumidor Final',
+            category: foodAsset.category || foodAsset.attributes?.category || 'CONSUMER'
+          }
+        }));
+        
+        // Ensure unique products by ID to avoid duplicate keys
+        const uniqueProducts = convertedProducts.filter((product, index, array) => 
+          index === array.findIndex(p => p.id === product.id)
+        );
+        setProducts(uniqueProducts);
+        
+        // Calcular estadísticas básicas
+        const scannedProducts = uniqueProducts.length;
+        const trackedProducts = uniqueProducts.filter(p => p.status === ProductStatus.ACTIVE).length;
+        const notificationsCount = uniqueProducts.filter(p => {
+          const expirationInfo = calculateExpirationInfo(p);
+          return expirationInfo.urgencyLevel === 'warning' || expirationInfo.urgencyLevel === 'critical';
+        }).length;
+        const savedProducts = uniqueProducts.filter(p => p.status === ProductStatus.CONSUMED).length;
+        
+        setStats({
+          scannedProducts,
+          trackedProducts,
+          notifications: notificationsCount,
+          savedProducts
+        });
+        
+        toast.success(`Dashboard actualizado - ${scannedProducts} productos disponibles para rastrear`, { id: 'dashboard-load' });
+      } else {
+        console.log('ℹ️ No se encontraron productos disponibles');
+        setProducts([]);
+        toast.info('No hay productos disponibles para rastrear.', { id: 'dashboard-empty' });
+      }
+      
+    } catch (error: any) {
+      console.error('❌ Error al cargar datos del dashboard:', error);
+      toast.error(`Error al cargar datos: ${error.message}`, { id: 'dashboard-error' });
+      setProducts([]);
     } finally {
       setIsLoading(false);
+      setIsInitialLoad(false);
     }
   };
 
@@ -187,13 +245,32 @@ export default function ConsumerDashboard() {
 
   const handleScanQR = () => {
     setShowScanner(true);
-    toast.success('Función de escaneo QR - Demo');
+    toast.success('Función de escaneo QR - Demo', { id: 'scan-demo' });
     // En una implementación real, aquí se abriría la cámara
     setTimeout(() => {
       setShowScanner(false);
-      toast.success('Producto escaneado: Tomates Cherry Orgánicos');
+      toast.success('Producto escaneado: Tomates Cherry Orgánicos', { id: 'scan-success' });
     }, 2000);
   };
+
+  if (isInitialLoad) {
+    return (
+      <>
+        <Head>
+          <title>Dashboard Consumidor - Food Traceability</title>
+          <meta name="description" content="Panel de control para consumidores finales" />
+        </Head>
+        
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-gray-600 mx-auto mb-4"></div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Cargando Dashboard</h2>
+            <p className="text-gray-600">Conectando con el blockchain y cargando productos disponibles...</p>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -215,7 +292,7 @@ export default function ConsumerDashboard() {
                 
                 <div className="flex items-center space-x-3">
                   <div className="w-8 h-8 bg-gray-600 rounded-lg flex items-center justify-center">
-                    <span className="text-white font-bold">👥</span>
+                    <UserIcon className="w-5 h-5 text-white" />
                   </div>
                   <div>
                     <h1 className="text-lg font-semibold text-gray-900">Panel Consumidor</h1>
@@ -225,6 +302,13 @@ export default function ConsumerDashboard() {
               </div>
 
               <div className="flex items-center space-x-4">
+                <NotificationBell
+                  notifications={notifications}
+                  stats={notificationStats}
+                  onMarkAsRead={markAsRead}
+                  onMarkAllAsRead={markAllAsRead}
+                />
+                
                 <button
                   onClick={loadDashboardData}
                   disabled={isLoading}
@@ -232,6 +316,10 @@ export default function ConsumerDashboard() {
                 >
                   {isLoading ? 'Actualizando...' : 'Actualizar'}
                 </button>
+                
+                <Link href="/profile" className="btn-secondary">
+                  Mi Perfil
+                </Link>
                 
                 <Link href="/auth" className="btn-primary">
                   Cambiar Usuario
@@ -243,6 +331,15 @@ export default function ConsumerDashboard() {
 
         <main className="py-8">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            {/* Breadcrumb */}
+            <div className="mb-6">
+              <Breadcrumb 
+                items={[
+                  { label: 'Dashboard Consumidor', current: true }
+                ]}
+              />
+            </div>
+
             {/* Welcome Section */}
             <div className="mb-8">
               <h2 className="text-2xl font-bold text-gray-900 mb-2">
@@ -305,7 +402,7 @@ export default function ConsumerDashboard() {
             </div>
 
             {/* Actions Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
               <div 
                 onClick={handleScanQR}
                 className="card hover:shadow-lg transition-shadow cursor-pointer"
@@ -346,6 +443,16 @@ export default function ConsumerDashboard() {
                   <p className="text-gray-600 text-sm">Ver productos consumidos anteriormente</p>
                 </div>
               </div>
+
+              <Link href="/profile" className="card hover:shadow-lg transition-shadow cursor-pointer">
+                <div className="text-center">
+                  <div className="w-16 h-16 bg-indigo-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+                    <CogIcon className="w-8 h-8 text-indigo-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Mi Perfil</h3>
+                  <p className="text-gray-600 text-sm">Configuración y certificado X.509</p>
+                </div>
+              </Link>
             </div>
 
             {/* Products Section */}
@@ -369,42 +476,60 @@ export default function ConsumerDashboard() {
 
               <div className="space-y-4">
                 {filteredProducts.map((product) => {
-                  const daysUntilExpiry = getDaysUntilExpiry(product.expirationDate);
-                  const isExpiring = isExpiringSoon(product.expirationDate);
+                  const expirationInfo = calculateExpirationInfo(product);
                   
                   return (
-                    <div key={product.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                    <div 
+                      key={product.id} 
+                      className={`border rounded-lg p-4 hover:shadow-md transition-shadow ${
+                        expirationInfo.urgencyLevel === 'critical' 
+                          ? 'border-red-300 bg-red-50' 
+                          : expirationInfo.urgencyLevel === 'warning'
+                          ? 'border-orange-300 bg-orange-50'
+                          : 'border-gray-200'
+                      }`}
+                    >
                       <div className="flex items-center justify-between">
                         <div className="flex-1">
                           <div className="flex items-center space-x-3 mb-2">
+                            <UserIcon className="w-5 h-5 text-gray-600" />
                             <h4 className="text-lg font-medium text-gray-900">{product.name}</h4>
                             <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(product.status)}`}>
                               {getStatusIcon(product.status)}
                               <span className="ml-1">{product.status}</span>
                             </span>
-                            {isExpiring && (
-                              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-                                <ExclamationTriangleIcon className="w-3 h-3 mr-1" />
-                                Vence en {daysUntilExpiry} días
+                            
+                            {expirationInfo.urgencyLevel !== 'normal' && (
+                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${expirationInfo.urgencyColor} ${
+                                expirationInfo.urgencyLevel === 'critical' ? 'animate-pulse' : ''
+                              }`}>
+                                {expirationInfo.urgencyLevel === 'critical' && <ExclamationTriangleIcon className="w-3 h-3 mr-1" />}
+                                {expirationInfo.urgencyLevel === 'warning' && <ClockIcon className="w-3 h-3 mr-1" />}
+                                {expirationInfo.urgencyMessage}
                               </span>
                             )}
                           </div>
                           
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600 mb-2">
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
                             <div className="flex items-center">
-                              <DocumentTextIcon className="w-4 h-4 mr-2" />
-                              <span>Origen: {product.producer.name}</span>
+                              <QrCodeIcon className="w-4 h-4 mr-2" />
+                              <span>{product.batchNumber}</span>
                             </div>
                             <div className="flex items-center">
                               <CalendarIcon className="w-4 h-4 mr-2" />
                               <span>Vence: <SafeDate date={product.expirationDate} /></span>
                             </div>
+                            <div className="flex items-center">
+                              <MapPinIcon className="w-4 h-4 mr-2" />
+                              <span>Origen: {product.producer.name}</span>
+                            </div>
                           </div>
 
-                          <div className="text-sm text-gray-500">
+                          <div className="mt-2 text-sm text-gray-500">
                             <span className="mr-4">Cantidad: {product.metadata.weight}</span>
-                            <span className="mr-4">Certificación: {product.metadata.certification}</span>
-                            <span>Variedad: {product.metadata.variety}</span>
+                            <span className="mr-4">Temp: {product.temperature}°C</span>
+                            <span className="mr-4">Humedad: {product.humidity}%</span>
+                            <span>Certificación: {product.metadata.certification}</span>
                           </div>
                         </div>
 
@@ -412,7 +537,15 @@ export default function ConsumerDashboard() {
                           <button className="btn-secondary text-sm">
                             Ver Trazabilidad
                           </button>
-                          <button className="btn-primary text-sm">
+                          <button 
+                            className={`px-3 py-1 rounded text-sm transition-colors ${
+                              expirationInfo.canTransfer
+                                ? 'bg-gray-600 hover:bg-gray-700 text-white'
+                                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                            }`}
+                            disabled={!expirationInfo.canTransfer}
+                            title={!expirationInfo.canTransfer ? 'Producto vencido no se puede consumir' : ''}
+                          >
                             Marcar Consumido
                           </button>
                         </div>

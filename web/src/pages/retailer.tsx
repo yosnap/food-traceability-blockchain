@@ -16,16 +16,18 @@ import {
   MapPinIcon,
   ShoppingCartIcon,
   CurrencyDollarIcon,
-  TagIcon
+  TagIcon,
+  QrCodeIcon,
+  CogIcon
 } from '@heroicons/react/24/outline';
 import { useAuth } from '@/hooks/useAuth';
-import { api } from '@/utils/api';
 import { Product, ProductStatus, UserRole } from '@/types';
 import SafeDate from '@/components/SafeDate';
 import TransferModal from '@/components/TransferModal';
 import NotificationBell from '@/components/NotificationBell';
 import { useNotifications } from '@/hooks/useNotifications';
 import { calculateExpirationInfo } from '@/utils/expirationUtils';
+import Breadcrumb from '@/components/Breadcrumb';
 
 interface RetailerStats {
   totalInventory: number;
@@ -34,22 +36,17 @@ interface RetailerStats {
   lowStock: number;
 }
 
-const mockStats: RetailerStats = {
-  totalInventory: 156,
-  activeProducts: 134,
-  soldToday: 28,
-  lowStock: 12
-};
-
 // Datos reales del blockchain - sin mock data
 
 export default function RetailerDashboard() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuth();
-  const [stats, setStats] = useState<RetailerStats>(mockStats);
+  const [stats, setStats] = useState<RetailerStats>({ totalInventory: 0, activeProducts: 0, soldToday: 0, lowStock: 0 });
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentUser, setCurrentUser] = useState<any>(null);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   
@@ -62,35 +59,138 @@ export default function RetailerDashboard() {
   } = useNotifications(products);
 
   useEffect(() => {
+    let timeoutId: NodeJS.Timeout | null = null;
+    let mounted = true;
+    
     // Simplified auth check
     if (typeof window !== 'undefined') {
       const storedRole = localStorage.getItem('userRole');
       const storedUser = localStorage.getItem('authUser');
+      const storedToken = localStorage.getItem('authToken');
       
-      if (!storedRole || !storedUser) {
-        router.push('/auth');
+      console.log('🔍 Dashboard auth check:', {
+        hasRole: !!storedRole,
+        hasUser: !!storedUser,
+        hasToken: !!storedToken,
+        role: storedRole
+      });
+      
+      if (!storedRole || !storedUser || !storedToken) {
+        console.log('❌ Missing auth data, redirecting to login');
+        if (mounted) {
+          router.push('/auth');
+        }
         return;
       }
       
       if (storedRole !== UserRole.RETAILER) {
-        toast.error('Acceso denegado: Se requiere rol de Minorista');
-        router.push('/auth');
+        if (mounted) {
+          toast.error('Acceso denegado: Se requiere rol de Minorista');
+          router.push('/auth');
+        }
         return;
+      }
+      
+      // Set current user from localStorage
+      try {
+        setCurrentUser(JSON.parse(storedUser));
+      } catch (error) {
+        console.error('Error parsing user:', error);
       }
     }
     
-    loadDashboardData();
+    // Load data with a small delay to avoid multiple calls
+    timeoutId = setTimeout(() => {
+      if (mounted) {
+        loadDashboardData();
+      }
+    }, 100);
+    
+    return () => {
+      mounted = false;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
   }, []);
 
   const loadDashboardData = async () => {
     setIsLoading(true);
     try {
-      toast.success('Dashboard actualizado');
-    } catch (error) {
-      toast.error('Error al cargar datos del dashboard');
-      console.error('Dashboard error:', error);
+      console.log('🔄 Cargando datos del dashboard de minorista...');
+      
+      // Importar funciones de API para cargar productos reales
+      const { getMyProducts } = await import('@/utils/api');
+      
+      // Cargar productos del usuario autenticado
+      const productsResponse = await getMyProducts();
+      
+      if (productsResponse.success && productsResponse.data) {
+        console.log('✅ Productos cargados:', productsResponse.data);
+        
+        // Convertir FoodAsset[] a Product[] para compatibilidad con la UI
+        const convertedProducts = productsResponse.data.map((foodAsset: any) => ({
+          id: foodAsset.id,
+          name: foodAsset.name,
+          batchNumber: foodAsset.batchNumber || foodAsset.attributes?.batchNumber,
+          productionDate: foodAsset.productionDate || foodAsset.attributes?.productionDate,
+          expirationDate: foodAsset.expirationDate || foodAsset.attributes?.expirationDate,
+          status: foodAsset.status || ProductStatus.ACTIVE,
+          currentLocation: foodAsset.origin?.farmName || foodAsset.attributes?.origin?.farmName || 'Supermercado Central',
+          temperature: foodAsset.storageConditions?.temperature || foodAsset.attributes?.storageConditions?.temperature || 6,
+          humidity: foodAsset.storageConditions?.humidity || foodAsset.attributes?.storageConditions?.humidity || 70,
+          producer: {
+            id: 'current-retailer',
+            name: foodAsset.origin?.farmName || foodAsset.attributes?.origin?.farmName || 'SuperMarket Plus',
+            location: foodAsset.origin?.location || foodAsset.attributes?.origin?.location || 'Plaza Central, Cartago'
+          },
+          metadata: {
+            variety: foodAsset.variety || foodAsset.attributes?.variety || 'Para venta',
+            weight: foodAsset.weight ? `${foodAsset.weight}kg` : (foodAsset.attributes?.weight ? `${foodAsset.attributes.weight}kg` : 'Sin especificar'),
+            certification: foodAsset.certifications?.join(', ') || foodAsset.attributes?.certifications?.join(', ') || 'CODEX',
+            harvestDate: foodAsset.productionDate || foodAsset.attributes?.productionDate,
+            description: foodAsset.description || foodAsset.attributes?.description || 'Producto para venta al consumidor',
+            brand: foodAsset.brand || foodAsset.attributes?.brand || 'SuperMarket Plus',
+            category: foodAsset.category || foodAsset.attributes?.category || 'RETAIL'
+          }
+        }));
+        
+        // Ensure unique products by ID to avoid duplicate keys
+        const uniqueProducts = convertedProducts.filter((product, index, array) => 
+          index === array.findIndex(p => p.id === product.id)
+        );
+        setProducts(uniqueProducts);
+        
+        // Calcular estadísticas básicas
+        const totalInventory = uniqueProducts.length;
+        const activeProducts = uniqueProducts.filter(p => p.status === ProductStatus.ACTIVE).length;
+        const soldToday = uniqueProducts.filter(p => p.status === ProductStatus.CONSUMED).length;
+        const lowStock = uniqueProducts.filter(p => {
+          const expirationInfo = calculateExpirationInfo(p);
+          return expirationInfo.urgencyLevel === 'warning' || expirationInfo.urgencyLevel === 'critical';
+        }).length;
+        
+        setStats({
+          totalInventory,
+          activeProducts,
+          soldToday,
+          lowStock
+        });
+        
+        toast.success(`Dashboard actualizado - ${totalInventory} productos en inventario`, { id: 'dashboard-load' });
+      } else {
+        console.log('ℹ️ No se encontraron productos en inventario');
+        setProducts([]);
+        toast.info('No hay productos en inventario registrados.', { id: 'dashboard-empty' });
+      }
+      
+    } catch (error: any) {
+      console.error('❌ Error al cargar datos del dashboard:', error);
+      toast.error(`Error al cargar datos: ${error.message}`, { id: 'dashboard-error' });
+      setProducts([]);
     } finally {
       setIsLoading(false);
+      setIsInitialLoad(false);
     }
   };
 
@@ -143,12 +243,13 @@ export default function RetailerDashboard() {
   };
 
   const handleTransferComplete = (product: Product, toRole: UserRole, recipient: any) => {
+    // Update product status to CONSUMED (sold)
     setProducts(prevProducts => 
       prevProducts.map(p => 
         p.id === product.id 
           ? { 
               ...p, 
-              status: ProductStatus.IN_TRANSIT, 
+              status: ProductStatus.CONSUMED, 
               currentLocation: `Vendido a ${recipient.name}`,
               metadata: {
                 ...p.metadata,
@@ -168,12 +269,36 @@ export default function RetailerDashboard() {
       )
     );
 
+    // Update stats
     setStats(prevStats => ({
       ...prevStats,
       soldToday: prevStats.soldToday + 1,
       activeProducts: prevStats.activeProducts - 1
     }));
+
+    toast.success(`Producto "${product.name}" vendido exitosamente a ${recipient.name}`, { id: 'sale-success' });
+    setShowTransferModal(false);
+    setSelectedProduct(null);
   };
+
+  if (isInitialLoad) {
+    return (
+      <>
+        <Head>
+          <title>Dashboard Minorista - Food Traceability</title>
+          <meta name="description" content="Panel de control para minoristas y supermercados" />
+        </Head>
+        
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-orange-600 mx-auto mb-4"></div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Cargando Dashboard</h2>
+            <p className="text-gray-600">Conectando con el blockchain y cargando tu inventario...</p>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
@@ -195,11 +320,11 @@ export default function RetailerDashboard() {
                 
                 <div className="flex items-center space-x-3">
                   <div className="w-8 h-8 bg-orange-600 rounded-lg flex items-center justify-center">
-                    <span className="text-white font-bold">🏪</span>
+                    <ShoppingCartIcon className="w-5 h-5 text-white" />
                   </div>
                   <div>
                     <h1 className="text-lg font-semibold text-gray-900">Panel Minorista</h1>
-                    <p className="text-sm text-gray-500">{user?.name}</p>
+                    <p className="text-sm text-gray-500">{currentUser?.name || 'Minorista'}</p>
                   </div>
                 </div>
               </div>
@@ -220,6 +345,10 @@ export default function RetailerDashboard() {
                   {isLoading ? 'Actualizando...' : 'Actualizar'}
                 </button>
                 
+                <Link href="/profile" className="btn-secondary">
+                  Mi Perfil
+                </Link>
+                
                 <Link href="/auth" className="btn-primary">
                   Cambiar Usuario
                 </Link>
@@ -230,10 +359,19 @@ export default function RetailerDashboard() {
 
         <main className="py-8">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            {/* Breadcrumb */}
+            <div className="mb-6">
+              <Breadcrumb 
+                items={[
+                  { label: 'Dashboard Minorista', current: true }
+                ]}
+              />
+            </div>
+
             {/* Welcome Section */}
             <div className="mb-8">
               <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                ¡Bienvenido, {user?.name}!
+                ¡Bienvenido, {currentUser?.name || 'Minorista'}!
               </h2>
               <p className="text-gray-600">
                 Gestiona tu inventario y ventas con trazabilidad completa
@@ -292,7 +430,7 @@ export default function RetailerDashboard() {
             </div>
 
             {/* Actions Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
               <div className="card hover:shadow-lg transition-shadow cursor-pointer">
                 <div className="text-center">
                   <div className="w-16 h-16 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-4">
@@ -322,6 +460,16 @@ export default function RetailerDashboard() {
                   <p className="text-gray-600 text-sm">Actualizar precios y promociones</p>
                 </div>
               </div>
+
+              <Link href="/profile" className="card hover:shadow-lg transition-shadow cursor-pointer">
+                <div className="text-center">
+                  <div className="w-16 h-16 bg-indigo-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+                    <CogIcon className="w-8 h-8 text-indigo-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Mi Perfil</h3>
+                  <p className="text-gray-600 text-sm">Configuración y certificado X.509</p>
+                </div>
+              </Link>
             </div>
 
             {/* Products Section */}
@@ -344,60 +492,85 @@ export default function RetailerDashboard() {
               </div>
 
               <div className="space-y-4">
-                {filteredProducts.map((product) => (
-                  <div key={product.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-3 mb-2">
-                          <h4 className="text-lg font-medium text-gray-900">{product.name}</h4>
-                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(product.status)}`}>
-                            {getStatusIcon(product.status)}
-                            <span className="ml-1">{product.status}</span>
-                          </span>
-                          {isExpiringSoon(product.expirationDate) && (
-                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-                              <ExclamationTriangleIcon className="w-3 h-3 mr-1" />
-                              Vence Pronto
+                {filteredProducts.map((product) => {
+                  const expirationInfo = calculateExpirationInfo(product);
+                  
+                  return (
+                    <div 
+                      key={product.id} 
+                      className={`border rounded-lg p-4 hover:shadow-md transition-shadow ${
+                        expirationInfo.urgencyLevel === 'critical' 
+                          ? 'border-red-300 bg-red-50' 
+                          : expirationInfo.urgencyLevel === 'warning'
+                          ? 'border-orange-300 bg-orange-50'
+                          : 'border-gray-200'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-3 mb-2">
+                            <ShoppingCartIcon className="w-5 h-5 text-orange-600" />
+                            <h4 className="text-lg font-medium text-gray-900">{product.name}</h4>
+                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(product.status)}`}>
+                              {getStatusIcon(product.status)}
+                              <span className="ml-1">{product.status}</span>
                             </span>
-                          )}
-                        </div>
+                            
+                            {expirationInfo.urgencyLevel !== 'normal' && (
+                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${expirationInfo.urgencyColor} ${
+                                expirationInfo.urgencyLevel === 'critical' ? 'animate-pulse' : ''
+                              }`}>
+                                {expirationInfo.urgencyLevel === 'critical' && <ExclamationTriangleIcon className="w-3 h-3 mr-1" />}
+                                {expirationInfo.urgencyLevel === 'warning' && <ClockIcon className="w-3 h-3 mr-1" />}
+                                {expirationInfo.urgencyMessage}
+                              </span>
+                            )}
+                          </div>
                         
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
-                          <div className="flex items-center">
-                            <DocumentTextIcon className="w-4 h-4 mr-2" />
-                            <span>{product.batchNumber}</span>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
+                            <div className="flex items-center">
+                              <QrCodeIcon className="w-4 h-4 mr-2" />
+                              <span>{product.batchNumber}</span>
+                            </div>
+                            <div className="flex items-center">
+                              <CalendarIcon className="w-4 h-4 mr-2" />
+                              <span>Vence: <SafeDate date={product.expirationDate} /></span>
+                            </div>
+                            <div className="flex items-center">
+                              <MapPinIcon className="w-4 h-4 mr-2" />
+                              <span>{product.currentLocation}</span>
+                            </div>
                           </div>
-                          <div className="flex items-center">
-                            <CalendarIcon className="w-4 h-4 mr-2" />
-                            <span>Vence: <SafeDate date={product.expirationDate} /></span>
-                          </div>
-                          <div className="flex items-center">
-                            <MapPinIcon className="w-4 h-4 mr-2" />
-                            <span>{product.currentLocation}</span>
+
+                          <div className="mt-2 text-sm text-gray-500">
+                            <span className="mr-4">Stock: {product.metadata.weight}</span>
+                            <span className="mr-4">Temp: {product.temperature}°C</span>
+                            <span className="mr-4">Humedad: {product.humidity}%</span>
+                            <span>Certificación: {product.metadata.certification}</span>
                           </div>
                         </div>
 
-                        <div className="mt-2 text-sm text-gray-500">
-                          <span className="mr-4">Stock: {product.metadata.weight}</span>
-                          <span className="mr-4">Temp: {product.temperature}°C</span>
-                          <span>Certificación: {product.metadata.certification}</span>
+                        <div className="flex items-center space-x-2">
+                          <button className="btn-secondary text-sm">
+                            Ver Historial
+                          </button>
+                          <button 
+                            onClick={() => handleTransferClick(product)}
+                            disabled={!expirationInfo.canTransfer}
+                            className={`px-3 py-1 rounded text-sm transition-colors ${
+                              expirationInfo.canTransfer
+                                ? 'bg-orange-600 hover:bg-orange-700 text-white'
+                                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                            }`}
+                            title={!expirationInfo.canTransfer ? 'No se puede vender producto vencido' : ''}
+                          >
+                            Vender
+                          </button>
                         </div>
-                      </div>
-
-                      <div className="flex items-center space-x-2">
-                        <button className="btn-secondary text-sm">
-                          Ver Historial
-                        </button>
-                        <button 
-                          onClick={() => handleTransferClick(product)}
-                          className="btn-primary text-sm"
-                        >
-                          Vender
-                        </button>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {filteredProducts.length === 0 && (

@@ -16,16 +16,18 @@ import {
   MapPinIcon,
   TruckIcon,
   ArchiveBoxIcon,
-  FireIcon
+  FireIcon,
+  QrCodeIcon,
+  CogIcon
 } from '@heroicons/react/24/outline';
 import { useAuth } from '@/hooks/useAuth';
-import { api } from '@/utils/api';
 import { Product, ProductStatus, UserRole } from '@/types';
 import SafeDate from '@/components/SafeDate';
 import TransferModal from '@/components/TransferModal';
 import NotificationBell from '@/components/NotificationBell';
 import { useNotifications } from '@/hooks/useNotifications';
-import { generateTestExpirationDates, calculateExpirationInfo } from '@/utils/expirationUtils';
+import { calculateExpirationInfo } from '@/utils/expirationUtils';
+import Breadcrumb from '@/components/Breadcrumb';
 
 interface DistributorStats {
   totalShipments: number;
@@ -34,91 +36,13 @@ interface DistributorStats {
   warehouses: number;
 }
 
-const mockStats: DistributorStats = {
-  totalShipments: 89,
-  inTransit: 23,
-  delivered: 66,
-  warehouses: 4
-};
-
-// Generar fechas de vencimiento variadas para testing
-const testDates = generateTestExpirationDates();
-
-const mockProducts: Product[] = [
-  {
-    id: 'dist-001',
-    name: 'Productos Lácteos Urgentes',
-    batchNumber: 'DIST-2025-001',
-    productionDate: '2025-01-28',
-    expirationDate: testDates.tomorrow, // Vence mañana
-    status: ProductStatus.ACTIVE,
-    currentLocation: 'Almacén Refrigerado A',
-    temperature: 2,
-    humidity: 65,
-    producer: {
-      id: 'distributor-001',
-      name: 'Logística Valle Central',
-      location: 'Centro de Distribución Principal'
-    },
-    metadata: {
-      variety: 'Lácteos',
-      weight: '1500kg',
-      certification: 'HACCP',
-      harvestDate: '2025-01-28'
-    }
-  },
-  {
-    id: 'dist-002',
-    name: 'Lote Frutas Mixtas',
-    batchNumber: 'DIST-2025-002',
-    productionDate: '2025-01-25',
-    expirationDate: testDates.threeDays, // Vence en 3 días
-    status: ProductStatus.IN_TRANSIT,
-    currentLocation: 'Camión Ruta Norte - KM 45',
-    temperature: 4,
-    humidity: 80,
-    producer: {
-      id: 'distributor-001',
-      name: 'Logística Valle Central',
-      location: 'Centro de Distribución Principal'
-    },
-    metadata: {
-      variety: 'Mixto',
-      weight: '2000kg',
-      certification: 'Cadena de Frío',
-      harvestDate: '2025-01-20'
-    }
-  },
-  {
-    id: 'dist-003',
-    name: 'Verduras Orgánicas Frescas',
-    batchNumber: 'DIST-2025-003',
-    productionDate: '2025-01-29',
-    expirationDate: testDates.oneWeek, // Vence en 1 semana
-    status: ProductStatus.ACTIVE,
-    currentLocation: 'Centro de Distribución - Zona B',
-    temperature: 3,
-    humidity: 90,
-    producer: {
-      id: 'distributor-001',
-      name: 'Logística Valle Central',
-      location: 'Centro de Distribución Principal'
-    },
-    metadata: {
-      variety: 'Verduras',
-      weight: '800kg',
-      certification: 'Orgánico',
-      harvestDate: '2025-01-28'
-    }
-  }
-];
-
 export default function DistributorDashboard() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuth();
-  const [stats, setStats] = useState<DistributorStats>(mockStats);
+  const [stats, setStats] = useState<DistributorStats>({ totalShipments: 0, inTransit: 0, delivered: 0, warehouses: 0 });
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [showTransferModal, setShowTransferModal] = useState(false);
@@ -133,19 +57,35 @@ export default function DistributorDashboard() {
   } = useNotifications(products);
 
   useEffect(() => {
+    let timeoutId: NodeJS.Timeout | null = null;
+    let mounted = true;
+    
     // Simplified auth check
     if (typeof window !== 'undefined') {
       const storedRole = localStorage.getItem('userRole');
       const storedUser = localStorage.getItem('authUser');
+      const storedToken = localStorage.getItem('authToken');
       
-      if (!storedRole || !storedUser) {
-        router.push('/auth');
+      console.log('🔍 Dashboard auth check:', {
+        hasRole: !!storedRole,
+        hasUser: !!storedUser,
+        hasToken: !!storedToken,
+        role: storedRole
+      });
+      
+      if (!storedRole || !storedUser || !storedToken) {
+        console.log('❌ Missing auth data, redirecting to login');
+        if (mounted) {
+          router.push('/auth');
+        }
         return;
       }
       
       if (storedRole !== UserRole.DISTRIBUTOR) {
-        toast.error('Acceso denegado: Se requiere rol de Distribuidor');
-        router.push('/auth');
+        if (mounted) {
+          toast.error('Acceso denegado: Se requiere rol de Distribuidor');
+          router.push('/auth');
+        }
         return;
       }
       
@@ -157,18 +97,95 @@ export default function DistributorDashboard() {
       }
     }
     
-    loadDashboardData();
+    // Load data with a small delay to avoid multiple calls
+    timeoutId = setTimeout(() => {
+      if (mounted) {
+        loadDashboardData();
+      }
+    }, 100);
+    
+    return () => {
+      mounted = false;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
   }, []);
 
   const loadDashboardData = async () => {
     setIsLoading(true);
     try {
-      toast.success('Dashboard actualizado');
-    } catch (error) {
-      toast.error('Error al cargar datos del dashboard');
-      console.error('Dashboard error:', error);
+      console.log('🔄 Cargando datos del dashboard de distribuidor...');
+      
+      // Importar funciones de API para cargar productos reales
+      const { getMyProducts } = await import('@/utils/api');
+      
+      // Cargar productos del usuario autenticado
+      const productsResponse = await getMyProducts();
+      
+      if (productsResponse.success && productsResponse.data) {
+        console.log('✅ Productos cargados:', productsResponse.data);
+        
+        // Convertir FoodAsset[] a Product[] para compatibilidad con la UI
+        const convertedProducts = productsResponse.data.map((foodAsset: any) => ({
+          id: foodAsset.id,
+          name: foodAsset.name,
+          batchNumber: foodAsset.batchNumber || foodAsset.attributes?.batchNumber,
+          productionDate: foodAsset.productionDate || foodAsset.attributes?.productionDate,
+          expirationDate: foodAsset.expirationDate || foodAsset.attributes?.expirationDate,
+          status: foodAsset.status || ProductStatus.ACTIVE,
+          currentLocation: foodAsset.origin?.farmName || foodAsset.attributes?.origin?.farmName || 'Centro de Distribución',
+          temperature: foodAsset.storageConditions?.temperature || foodAsset.attributes?.storageConditions?.temperature || 4,
+          humidity: foodAsset.storageConditions?.humidity || foodAsset.attributes?.storageConditions?.humidity || 75,
+          producer: {
+            id: 'current-distributor',
+            name: foodAsset.origin?.farmName || foodAsset.attributes?.origin?.farmName || 'Logística Valle Central',
+            location: foodAsset.origin?.location || foodAsset.attributes?.origin?.location || 'Centro de Distribución Principal'
+          },
+          metadata: {
+            variety: foodAsset.variety || foodAsset.attributes?.variety || 'Mixto',
+            weight: foodAsset.weight ? `${foodAsset.weight}kg` : (foodAsset.attributes?.weight ? `${foodAsset.attributes.weight}kg` : 'Sin especificar'),
+            certification: foodAsset.certifications?.join(', ') || foodAsset.attributes?.certifications?.join(', ') || 'Cadena de Frío',
+            harvestDate: foodAsset.productionDate || foodAsset.attributes?.productionDate,
+            description: foodAsset.description || foodAsset.attributes?.description || 'Producto en distribución',
+            brand: foodAsset.brand || foodAsset.attributes?.brand || 'Valle Central',
+            category: foodAsset.category || foodAsset.attributes?.category || 'DISTRIBUTION'
+          }
+        }));
+        
+        // Ensure unique products by ID to avoid duplicate keys
+        const uniqueProducts = convertedProducts.filter((product, index, array) => 
+          index === array.findIndex(p => p.id === product.id)
+        );
+        setProducts(uniqueProducts);
+        
+        // Calcular estadísticas básicas
+        const totalShipments = uniqueProducts.length;
+        const inTransit = uniqueProducts.filter(p => p.status === ProductStatus.IN_TRANSIT).length;
+        const delivered = uniqueProducts.filter(p => p.status === ProductStatus.CONSUMED).length;
+        const warehouses = 4; // Número fijo de almacenes
+        
+        setStats({
+          totalShipments,
+          inTransit,
+          delivered,
+          warehouses
+        });
+        
+        toast.success(`Dashboard actualizado - ${totalShipments} envíos gestionados`, { id: 'dashboard-load' });
+      } else {
+        console.log('ℹ️ No se encontraron productos en distribución');
+        setProducts([]);
+        toast.info('No hay productos en distribución registrados.', { id: 'dashboard-empty' });
+      }
+      
+    } catch (error: any) {
+      console.error('❌ Error al cargar datos del dashboard:', error);
+      toast.error(`Error al cargar datos: ${error.message}`, { id: 'dashboard-error' });
+      setProducts([]);
     } finally {
       setIsLoading(false);
+      setIsInitialLoad(false);
     }
   };
 
@@ -207,19 +224,13 @@ export default function DistributorDashboard() {
     }
   };
 
-  const getTemperatureStatus = (temp: number) => {
-    if (temp <= 5) return { color: 'text-blue-600', status: 'Óptima' };
-    if (temp <= 15) return { color: 'text-green-600', status: 'Buena' };
-    if (temp <= 25) return { color: 'text-orange-600', status: 'Alerta' };
-    return { color: 'text-red-600', status: 'Crítica' };
-  };
-
   const handleTransferClick = (product: Product) => {
     setSelectedProduct(product);
     setShowTransferModal(true);
   };
 
   const handleTransferComplete = (product: Product, toRole: UserRole, recipient: any) => {
+    // Update product status to IN_TRANSIT
     setProducts(prevProducts => 
       prevProducts.map(p => 
         p.id === product.id 
@@ -245,17 +256,41 @@ export default function DistributorDashboard() {
       )
     );
 
+    // Update stats
     setStats(prevStats => ({
       ...prevStats,
       inTransit: prevStats.inTransit + 1
     }));
+
+    toast.success(`Producto "${product.name}" enviado exitosamente a ${recipient.name}`, { id: 'transfer-success' });
+    setShowTransferModal(false);
+    setSelectedProduct(null);
   };
+
+  if (isInitialLoad) {
+    return (
+      <>
+        <Head>
+          <title>Dashboard Distribuidor - Food Traceability</title>
+          <meta name="description" content="Panel de control para distribuidores de alimentos" />
+        </Head>
+        
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Cargando Dashboard</h2>
+            <p className="text-gray-600">Conectando con el blockchain y cargando tus envíos...</p>
+          </div>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
       <Head>
         <title>Dashboard Distribuidor - Food Traceability</title>
-        <meta name="description" content="Panel de control para distribuidores y logística" />
+        <meta name="description" content="Panel de control para distribuidores de alimentos" />
       </Head>
 
       <div className="min-h-screen bg-gray-50">
@@ -270,8 +305,8 @@ export default function DistributorDashboard() {
                 </Link>
                 
                 <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-purple-600 rounded-lg flex items-center justify-center">
-                    <span className="text-white font-bold">🚛</span>
+                  <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                    <TruckIcon className="w-5 h-5 text-white" />
                   </div>
                   <div>
                     <h1 className="text-lg font-semibold text-gray-900">Panel Distribuidor</h1>
@@ -296,6 +331,10 @@ export default function DistributorDashboard() {
                   {isLoading ? 'Actualizando...' : 'Actualizar'}
                 </button>
                 
+                <Link href="/profile" className="btn-secondary">
+                  Mi Perfil
+                </Link>
+                
                 <Link href="/auth" className="btn-primary">
                   Cambiar Usuario
                 </Link>
@@ -306,13 +345,22 @@ export default function DistributorDashboard() {
 
         <main className="py-8">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            {/* Breadcrumb */}
+            <div className="mb-6">
+              <Breadcrumb 
+                items={[
+                  { label: 'Dashboard Distribuidor', current: true }
+                ]}
+              />
+            </div>
+
             {/* Welcome Section */}
             <div className="mb-8">
               <h2 className="text-2xl font-bold text-gray-900 mb-2">
                 ¡Bienvenido, {currentUser?.name || 'Distribuidor'}!
               </h2>
               <p className="text-gray-600">
-                Gestiona la logística y distribución con control de cadena de frío
+                Gestiona la logística y distribución de productos alimentarios a minoristas
               </p>
             </div>
 
@@ -320,8 +368,8 @@ export default function DistributorDashboard() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
               <div className="card">
                 <div className="flex items-center">
-                  <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
-                    <DocumentTextIcon className="w-6 h-6 text-purple-600" />
+                  <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
+                    <TruckIcon className="w-6 h-6 text-blue-600" />
                   </div>
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-600">Total Envíos</p>
@@ -332,8 +380,8 @@ export default function DistributorDashboard() {
 
               <div className="card">
                 <div className="flex items-center">
-                  <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <TruckIcon className="w-6 h-6 text-blue-600" />
+                  <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
+                    <ClockIcon className="w-6 h-6 text-orange-600" />
                   </div>
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-600">En Tránsito</p>
@@ -356,8 +404,8 @@ export default function DistributorDashboard() {
 
               <div className="card">
                 <div className="flex items-center">
-                  <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-                    <ArchiveBoxIcon className="w-6 h-6 text-orange-600" />
+                  <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
+                    <ArchiveBoxIcon className="w-6 h-6 text-purple-600" />
                   </div>
                   <div className="ml-4">
                     <p className="text-sm font-medium text-gray-600">Almacenes</p>
@@ -368,42 +416,52 @@ export default function DistributorDashboard() {
             </div>
 
             {/* Actions Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
               <div className="card hover:shadow-lg transition-shadow cursor-pointer">
                 <div className="text-center">
                   <div className="w-16 h-16 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-                    <TruckIcon className="w-8 h-8 text-blue-600" />
+                    <ArchiveBoxIcon className="w-8 h-8 text-blue-600" />
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Nuevo Envío</h3>
-                  <p className="text-gray-600 text-sm">Iniciar transporte de productos</p>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Gestión de Inventario</h3>
+                  <p className="text-gray-600 text-sm">Control de almacenes y stock</p>
                 </div>
               </div>
 
               <div className="card hover:shadow-lg transition-shadow cursor-pointer">
                 <div className="text-center">
                   <div className="w-16 h-16 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-                    <ArchiveBoxIcon className="w-8 h-8 text-green-600" />
+                    <TruckIcon className="w-8 h-8 text-green-600" />
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Gestión Almacén</h3>
-                  <p className="text-gray-600 text-sm">Controlar inventario en almacenes</p>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Planificar Rutas</h3>
+                  <p className="text-gray-600 text-sm">Optimizar entregas a minoristas</p>
                 </div>
               </div>
 
               <div className="card hover:shadow-lg transition-shadow cursor-pointer">
                 <div className="text-center">
                   <div className="w-16 h-16 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-                    <ExclamationTriangleIcon className="w-8 h-8 text-purple-600" />
+                    <DocumentTextIcon className="w-8 h-8 text-purple-600" />
                   </div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Control Temperatura</h3>
-                  <p className="text-gray-600 text-sm">Monitorear cadena de frío</p>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Reportes Logísticos</h3>
+                  <p className="text-gray-600 text-sm">Estadísticas de distribución</p>
                 </div>
               </div>
+
+              <Link href="/profile" className="card hover:shadow-lg transition-shadow cursor-pointer">
+                <div className="text-center">
+                  <div className="w-16 h-16 bg-indigo-100 rounded-lg flex items-center justify-center mx-auto mb-4">
+                    <CogIcon className="w-8 h-8 text-indigo-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Mi Perfil</h3>
+                  <p className="text-gray-600 text-sm">Configuración y certificado X.509</p>
+                </div>
+              </Link>
             </div>
 
             {/* Products Section */}
             <div className="card">
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-semibold text-gray-900">Envíos Activos</h3>
+                <h3 className="text-lg font-semibold text-gray-900">Productos en Distribución</h3>
                 
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -421,26 +479,43 @@ export default function DistributorDashboard() {
 
               <div className="space-y-4">
                 {filteredProducts.map((product) => {
-                  const tempStatus = getTemperatureStatus(product.temperature);
+                  const expirationInfo = calculateExpirationInfo(product);
+                  
                   return (
-                    <div key={product.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                    <div 
+                      key={product.id} 
+                      className={`border rounded-lg p-4 hover:shadow-md transition-shadow ${
+                        expirationInfo.urgencyLevel === 'critical' 
+                          ? 'border-red-300 bg-red-50' 
+                          : expirationInfo.urgencyLevel === 'warning'
+                          ? 'border-orange-300 bg-orange-50'
+                          : 'border-gray-200'
+                      }`}
+                    >
                       <div className="flex items-center justify-between">
                         <div className="flex-1">
                           <div className="flex items-center space-x-3 mb-2">
+                            <TruckIcon className="w-5 h-5 text-blue-600" />
                             <h4 className="text-lg font-medium text-gray-900">{product.name}</h4>
                             <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(product.status)}`}>
                               {getStatusIcon(product.status)}
                               <span className="ml-1">{product.status}</span>
                             </span>
-                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 ${tempStatus.color}`}>
-                              <FireIcon className="w-3 h-3 mr-1" />
-                              {tempStatus.status}
-                            </span>
+                            
+                            {expirationInfo.urgencyLevel !== 'normal' && (
+                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${expirationInfo.urgencyColor} ${
+                                expirationInfo.urgencyLevel === 'critical' ? 'animate-pulse' : ''
+                              }`}>
+                                {expirationInfo.urgencyLevel === 'critical' && <ExclamationTriangleIcon className="w-3 h-3 mr-1" />}
+                                {expirationInfo.urgencyLevel === 'warning' && <ClockIcon className="w-3 h-3 mr-1" />}
+                                {expirationInfo.urgencyMessage}
+                              </span>
+                            )}
                           </div>
-                          
+                        
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
                             <div className="flex items-center">
-                              <DocumentTextIcon className="w-4 h-4 mr-2" />
+                              <QrCodeIcon className="w-4 h-4 mr-2" />
                               <span>{product.batchNumber}</span>
                             </div>
                             <div className="flex items-center">
@@ -454,22 +529,28 @@ export default function DistributorDashboard() {
                           </div>
 
                           <div className="mt-2 text-sm text-gray-500">
-                            <span className="mr-4">Carga: {product.metadata.weight}</span>
+                            <span className="mr-4">Peso: {product.metadata.weight}</span>
                             <span className="mr-4">Temp: {product.temperature}°C</span>
                             <span className="mr-4">Humedad: {product.humidity}%</span>
-                            <span>Cert: {product.metadata.certification}</span>
+                            <span>Certificación: {product.metadata.certification}</span>
                           </div>
                         </div>
 
                         <div className="flex items-center space-x-2">
                           <button className="btn-secondary text-sm">
-                            Rastrear
+                            Rastrear Envío
                           </button>
                           <button 
                             onClick={() => handleTransferClick(product)}
-                            className="btn-primary text-sm"
+                            disabled={!expirationInfo.canTransfer}
+                            className={`px-3 py-1 rounded text-sm transition-colors ${
+                              expirationInfo.canTransfer
+                                ? 'bg-blue-600 hover:bg-blue-700 text-white'
+                                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                            }`}
+                            title={!expirationInfo.canTransfer ? 'No se puede transferir producto vencido' : ''}
                           >
-                            Transferir
+                            Distribuir
                           </button>
                         </div>
                       </div>
@@ -481,12 +562,12 @@ export default function DistributorDashboard() {
               {filteredProducts.length === 0 && (
                 <div className="text-center py-8">
                   <TruckIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">No hay envíos</h3>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">No hay productos en distribución</h3>
                   <p className="text-gray-600 mb-4">
-                    {searchTerm ? 'No se encontraron envíos con ese término' : 'No tienes envíos activos'}
+                    {searchTerm ? 'No se encontraron envíos con ese término' : 'No tienes productos pendientes de distribución'}
                   </p>
                   <button className="btn-primary">
-                    Crear Nuevo Envío
+                    Recibir Productos
                   </button>
                 </div>
               )}

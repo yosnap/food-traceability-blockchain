@@ -175,12 +175,16 @@ export default function ProducerDashboard() {
           }
         }));
         
-        setProducts(convertedProducts);
+        // Ensure unique products by ID to avoid duplicate keys
+        const uniqueProducts = convertedProducts.filter((product, index, array) => 
+          index === array.findIndex(p => p.id === product.id)
+        );
+        setProducts(uniqueProducts);
         
         // Calcular estadísticas básicas
-        const totalProducts = convertedProducts.length;
-        const activeProducts = convertedProducts.filter(p => p.status === ProductStatus.ACTIVE).length;
-        const expiringSoon = convertedProducts.filter(p => isExpiringSoon(p.expirationDate)).length;
+        const totalProducts = uniqueProducts.length;
+        const activeProducts = uniqueProducts.filter(p => p.status === ProductStatus.ACTIVE).length;
+        const expiringSoon = uniqueProducts.filter(p => isExpiringSoon(p.expirationDate)).length;
         
         setStats({
           totalProducts,

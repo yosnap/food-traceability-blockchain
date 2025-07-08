@@ -20,6 +20,9 @@ const roleDescriptions: Record<UserRole, string> = {
   [UserRole.ADMIN]: 'Administradores del sistema con acceso completo.',
 };
 
+// Roles disponibles en la interfaz (excluyendo Factory)
+const availableRoles = Object.values(UserRole).filter(role => role !== UserRole.FACTORY);
+
 const roleDashboards: Record<UserRole, string> = {
   [UserRole.PRODUCER]: '/producer',
   [UserRole.FACTORY]: '/factory',
@@ -206,7 +209,7 @@ export default function AuthPage() {
             {!selectedRole ? (
               /* Role Selection */
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {Object.values(UserRole).map((role) => (
+                {availableRoles.map((role) => (
                   <div
                     key={role}
                     className="card cursor-pointer hover:shadow-lg transition-all duration-300 hover:scale-105"

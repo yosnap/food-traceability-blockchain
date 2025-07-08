@@ -10,6 +10,7 @@ import Link from 'next/link';
 import { toast } from 'react-hot-toast';
 import {
   ArrowLeftIcon,
+  ArrowRightIcon,
   UserIcon,
   KeyIcon,
   CreditCardIcon,
@@ -20,7 +21,8 @@ import {
   CheckCircleIcon,
   XCircleIcon,
   ShieldCheckIcon,
-  IdentificationIcon
+  IdentificationIcon,
+  DocumentTextIcon
 } from '@heroicons/react/24/outline';
 import { useAuth } from '@/hooks/useAuth';
 import { walletService } from '@/services/walletService';
@@ -520,6 +522,268 @@ export default function ProfilePage() {
                 </div>
               </div>
             )}
+
+            {/* Role-Specific Information */}
+            <div className="card">
+              <div className="flex items-center space-x-3 mb-6">
+                <CogIcon className="w-6 h-6 text-blue-600" />
+                <h2 className="text-xl font-semibold text-gray-900">Funcionalidades del Rol</h2>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {userInfo.role === UserRole.PRODUCER && (
+                  <>
+                    <Link href="/producer/create-product" className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                          <span className="text-green-600 font-bold">+</span>
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-900">Crear Producto</h3>
+                          <p className="text-xs text-gray-500">Registrar nuevos productos</p>
+                        </div>
+                      </div>
+                    </Link>
+                    <Link href="/producer/transfer" className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                          <ArrowRightIcon className="w-4 h-4 text-blue-600" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-900">Transferir Productos</h3>
+                          <p className="text-xs text-gray-500">Enviar a procesadores</p>
+                        </div>
+                      </div>
+                    </Link>
+                    <Link href="/producer/reports" className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                          <DocumentTextIcon className="w-4 h-4 text-purple-600" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-900">Reportes</h3>
+                          <p className="text-xs text-gray-500">Estadísticas de producción</p>
+                        </div>
+                      </div>
+                    </Link>
+                  </>
+                )}
+                
+                {userInfo.role === UserRole.PROCESSOR && (
+                  <>
+                    <div className="p-4 border border-gray-200 rounded-lg bg-gray-50">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                          <CogIcon className="w-4 h-4 text-purple-600" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-900">Procesar Materias Primas</h3>
+                          <p className="text-xs text-gray-500">Transformar productos agrícolas</p>
+                        </div>
+                      </div>
+                    </div>
+                    <Link href="/processor/transfer" className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                          <ArrowRightIcon className="w-4 h-4 text-green-600" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-900">Transferir Procesados</h3>
+                          <p className="text-xs text-gray-500">Enviar a distribuidores</p>
+                        </div>
+                      </div>
+                    </Link>
+                    <Link href="/processor/reports" className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center">
+                          <DocumentTextIcon className="w-4 h-4 text-indigo-600" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-900">Métricas de Calidad</h3>
+                          <p className="text-xs text-gray-500">Reportes de procesamiento</p>
+                        </div>
+                      </div>
+                    </Link>
+                  </>
+                )}
+                
+                {userInfo.role === UserRole.DISTRIBUTOR && (
+                  <>
+                    <div className="p-4 border border-gray-200 rounded-lg bg-gray-50">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                          <span className="text-blue-600 font-bold">📦</span>
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-900">Gestión de Inventario</h3>
+                          <p className="text-xs text-gray-500">Control de almacenes</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="p-4 border border-gray-200 rounded-lg bg-gray-50">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                          <ArrowRightIcon className="w-4 h-4 text-green-600" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-900">Distribución</h3>
+                          <p className="text-xs text-gray-500">Enviar a minoristas</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="p-4 border border-gray-200 rounded-lg bg-gray-50">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                          <DocumentTextIcon className="w-4 h-4 text-purple-600" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-900">Logística</h3>
+                          <p className="text-xs text-gray-500">Rutas y entregas</p>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+                
+                {userInfo.role === UserRole.RETAILER && (
+                  <>
+                    <div className="p-4 border border-gray-200 rounded-lg bg-gray-50">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                          <span className="text-green-600 font-bold">🏪</span>
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-900">Punto de Venta</h3>
+                          <p className="text-xs text-gray-500">Gestión de tienda</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="p-4 border border-gray-200 rounded-lg bg-gray-50">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                          <CheckCircleIcon className="w-4 h-4 text-blue-600" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-900">Venta a Consumidores</h3>
+                          <p className="text-xs text-gray-500">Transacciones finales</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="p-4 border border-gray-200 rounded-lg bg-gray-50">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
+                          <ClockIcon className="w-4 h-4 text-orange-600" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-900">Control de Fechas</h3>
+                          <p className="text-xs text-gray-500">Gestión de vencimientos</p>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+                
+                {userInfo.role === UserRole.CONSUMER && (
+                  <>
+                    <div className="p-4 border border-gray-200 rounded-lg bg-gray-50">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+                          <EyeIcon className="w-4 h-4 text-green-600" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-900">Ver Trazabilidad</h3>
+                          <p className="text-xs text-gray-500">Historia del producto</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="p-4 border border-gray-200 rounded-lg bg-gray-50">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                          <CheckCircleIcon className="w-4 h-4 text-blue-600" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-900">Marcar como Consumido</h3>
+                          <p className="text-xs text-gray-500">Finalizar trazabilidad</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="p-4 border border-gray-200 rounded-lg bg-gray-50">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                          <DocumentTextIcon className="w-4 h-4 text-purple-600" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-900">Valorar Producto</h3>
+                          <p className="text-xs text-gray-500">Feedback y calificaciones</p>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+                
+                {userInfo.role === UserRole.ADMIN && (
+                  <>
+                    <div className="p-4 border border-gray-200 rounded-lg bg-gray-50">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center">
+                          <ShieldCheckIcon className="w-4 h-4 text-red-600" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-900">Gestión de Usuarios</h3>
+                          <p className="text-xs text-gray-500">Administrar roles y permisos</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="p-4 border border-gray-200 rounded-lg bg-gray-50">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
+                          <DocumentTextIcon className="w-4 h-4 text-blue-600" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-900">Reportes del Sistema</h3>
+                          <p className="text-xs text-gray-500">Estadísticas globales</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="p-4 border border-gray-200 rounded-lg bg-gray-50">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+                          <CogIcon className="w-4 h-4 text-purple-600" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-medium text-gray-900">Configuración</h3>
+                          <p className="text-xs text-gray-500">Configuración del sistema</p>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Recent Transfers Section */}
+            <div className="card">
+              <div className="flex items-center space-x-3 mb-6">
+                <ArrowRightIcon className="w-6 h-6 text-green-600" />
+                <h2 className="text-xl font-semibold text-gray-900">Transferencias Recientes</h2>
+              </div>
+              
+              <div className="text-center py-8">
+                <ArrowRightIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">Historial de Transferencias</h3>
+                <p className="text-gray-600 mb-4">
+                  {userInfo.role === UserRole.PRODUCER && 'Aquí aparecerán los productos que has transferido a procesadores y distribuidores.'}
+                  {userInfo.role === UserRole.PROCESSOR && 'Aquí aparecerán los productos procesados que has transferido a distribuidores.'}
+                  {userInfo.role === UserRole.DISTRIBUTOR && 'Aquí aparecerán los productos que has distribuido a minoristas.'}
+                  {userInfo.role === UserRole.RETAILER && 'Aquí aparecerán los productos vendidos a consumidores.'}
+                  {userInfo.role === UserRole.CONSUMER && 'Aquí aparecerán los productos que has marcado como consumidos.'}
+                  {userInfo.role === UserRole.ADMIN && 'Historial completo de transferencias del sistema.'}
+                </p>
+                <p className="text-sm text-gray-500">
+                  Las transferencias realizadas se registran en el blockchain para garantizar la trazabilidad completa.
+                </p>
+              </div>
+            </div>
 
             {/* Estado de la Cuenta */}
             <div className="card">

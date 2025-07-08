@@ -556,19 +556,20 @@ export class FabricGatewayService {
     ): Promise<string> {
         console.log(`🔄 [${currentOwnerUserId}] Transfiriendo asset ${transferData.assetId} a ${transferData.newOwner}`);
         
+        // Obtener la dirección del propietario actual (necesaria para SimpleContract)
+        const currentOwnerAddress = await this.getUserWalletAddress(currentOwnerUserId);
+        
         return await this.submitTransactionAsUser(
             currentOwnerUserId,
             currentOwnerRole,
             'food',
-            'FoodTraceabilityContract:transferFoodAsset',
-            transferData.assetId,
-            transferData.newOwner,
-            transferData.transferType,
-            transferData.locationData,
-            transferData.quantity?.toString() || '',
-            transferData.price?.toString() || '',
-            transferData.conditions || '',
-            transferData.notes || ''
+            'transferProduct',
+            transferData.assetId,                    // tokenId
+            currentOwnerAddress,                     // fromOwner
+            transferData.newOwner,                   // toOwner  
+            transferData.quantity?.toString() || '1', // amount
+            transferData.transferType,               // transferType
+            transferData.notes || ''                 // notes
         );
     }
 
