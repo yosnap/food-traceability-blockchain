@@ -216,6 +216,11 @@ export class FoodController {
                 notes
             } = req.body;
 
+            // Obtener el usuario autenticado
+            const authenticatedUser = (req as any).user;
+            const currentOwnerUserId = authenticatedUser?.userId || authenticatedUser?.fabricUserId || 'User1@org1.example.com';
+            const currentOwnerRole = authenticatedUser?.role || 'producer';
+
             const transferData = {
                 assetId: productId,
                 newOwner,
@@ -227,7 +232,13 @@ export class FoodController {
                 notes
             };
 
-            const result = await fabricGatewayService.transferFoodAsset(transferData);
+            console.log(`🔄 Transfiriendo producto ${productId} como ${currentOwnerUserId} (${currentOwnerRole})`);
+
+            const result = await fabricGatewayService.transferFoodAsset(
+                currentOwnerUserId,
+                currentOwnerRole,
+                transferData
+            );
 
             res.json({
                 success: true,

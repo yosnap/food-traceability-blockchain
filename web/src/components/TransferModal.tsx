@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { XMarkIcon, ArrowRightIcon } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
-import { Product, UserRole } from '@/types';
+import { Product, UserRole, TransferType } from '@/types';
+import { transferProduct } from '@/utils/api';
 
 interface TransferModalProps {
   isOpen: boolean;
@@ -72,35 +73,42 @@ export default function TransferModal({ isOpen, onClose, product, fromRole, onTr
     setIsLoading(true);
     
     try {
-      // Simular delay de API
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // Crear transferencia simulada
+      // Preparar datos para la API
       const transferData = {
-        transferId: `TR-${Date.now()}`,
-        productId: product.id,
-        fromRole,
-        toRole: selectedRole as UserRole,
-        recipient: selectedRecipient,
-        timestamp: new Date().toISOString(),
-        notes,
-        status: 'completed'
+        newOwner: selectedRecipient.id,
+        transferType: TransferType.PROCESSING, // Tipo de transferencia apropiado
+        location: {
+          address: selectedRecipient.location,
+          city: 'Ciudad', // Se puede extraer de selectedRecipient.location si tiene más datos
+          country: 'España'
+        },
+        quantity: product.quantity || 1,
+        conditions: `Transferencia de ${roleNames[fromRole]} a ${roleNames[selectedRole as UserRole]}`,
+        notes: notes || `Transferido a ${selectedRecipient.name}`
       };
 
-      console.log('Transfer completed:', transferData);
+      console.log('🔄 Enviando transferencia a la API:', transferData);
       
-      onTransferComplete(product, selectedRole as UserRole, selectedRecipient);
-      toast.success(`Producto transferido exitosamente a ${selectedRecipient.name}`);
+      // Llamar a la API real
+      const response = await transferProduct(product.id, transferData);
       
-      // Reset form
-      setSelectedRole('');
-      setSelectedRecipient(null);
-      setNotes('');
-      onClose();
+      if (response.success) {
+        onTransferComplete(product, selectedRole as UserRole, selectedRecipient);
+        toast.success(`Producto transferido exitosamente a ${selectedRecipient.name}`);
+        
+        // Reset form
+        setSelectedRole('');
+        setSelectedRecipient(null);
+        setNotes('');
+        onClose();
+      } else {
+        throw new Error(response.message || 'Error en la transferencia');
+      }
       
-    } catch (error) {
-      toast.error('Error al procesar la transferencia');
-      console.error('Transfer error:', error);
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.message || error.message || 'Error al procesar la transferencia';
+      toast.error(errorMessage);
+      console.error('❌ Transfer error:', error);
     } finally {
       setIsLoading(false);
     }
