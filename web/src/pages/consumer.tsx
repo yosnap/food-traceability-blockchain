@@ -89,7 +89,7 @@ export default function ConsumerDashboard() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuth();
   const [stats, setStats] = useState<ConsumerStats>(mockStats);
-  const [products, setProducts] = useState<Product[]>(mockProducts);
+  const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [showScanner, setShowScanner] = useState(false);

@@ -69,12 +69,29 @@ export class ValidationUtils {
     }
     
     /**
-     * Valida si una dirección blockchain es válida (formato Ethereum)
+     * Valida si una dirección blockchain es válida (formato Ethereum o X.509)
      */
     static isValidBlockchainAddress(address: string): boolean {
         if (!address) return false;
+        
+        // Formato Ethereum: 0x seguido de 40 caracteres hexadecimales
         const ethereumRegex = /^0x[a-fA-F0-9]{40}$/;
-        return ethereumRegex.test(address);
+        if (ethereumRegex.test(address)) {
+            return true;
+        }
+        
+        // Formato X.509: debe comenzar con x509:: y contener información de certificado
+        const x509Regex = /^x509::/;
+        if (x509Regex.test(address) && address.length > 10) {
+            return true;
+        }
+        
+        // Otras direcciones/IDs válidos (al menos 3 caracteres)
+        if (address.length >= 3) {
+            return true;
+        }
+        
+        return false;
     }
     
     /**

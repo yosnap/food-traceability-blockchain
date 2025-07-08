@@ -26,15 +26,20 @@ export const useAuth = (): AuthContextType => {
         const storedToken = localStorage.getItem('authToken');
         const storedUser = localStorage.getItem('authUser');
         
-        if (storedToken && storedUser) {
+        if (storedToken && storedUser && storedUser !== 'undefined' && storedUser !== 'null') {
           try {
             const parsedUser = JSON.parse(storedUser);
-            setUser(parsedUser);
-            setToken(storedToken);
+            if (parsedUser && typeof parsedUser === 'object') {
+              setUser(parsedUser);
+              setToken(storedToken);
+            } else {
+              throw new Error('Invalid user data');
+            }
           } catch (error) {
             console.error('Error parsing stored user:', error);
             localStorage.removeItem('authToken');
             localStorage.removeItem('authUser');
+            localStorage.removeItem('userRole');
           }
         }
       }

@@ -23,7 +23,7 @@ import SafeDate from '@/components/SafeDate';
 import TransferModal from '@/components/TransferModal';
 import NotificationBell from '@/components/NotificationBell';
 import { useNotifications } from '@/hooks/useNotifications';
-import { generateTestExpirationDates, calculateExpirationInfo } from '@/utils/expirationUtils';
+import { calculateExpirationInfo } from '@/utils/expirationUtils';
 
 interface DashboardStats {
   totalProducts: number;
@@ -39,149 +39,13 @@ const mockStats: DashboardStats = {
   transfers: 156
 };
 
-// Generar fechas de vencimiento variadas para testing
-const testDates = generateTestExpirationDates();
-
-const mockProducts: Product[] = [
-  {
-    id: 'prod-001',
-    name: 'Lechuga Hidropónica',
-    batchNumber: 'BATCH-2025-001',
-    productionDate: '2025-01-28',
-    expirationDate: testDates.expired, // Vencido hace 2 días
-    status: ProductStatus.ACTIVE,
-    currentLocation: 'Finca San Pedro - Invernadero A',
-    temperature: 4,
-    humidity: 85,
-    producer: {
-      id: 'producer-001',
-      name: 'Finca San Pedro',
-      location: 'Valle Central, Costa Rica'
-    },
-    metadata: {
-      variety: 'Romana',
-      weight: '25kg',
-      certification: 'Orgánico',
-      harvestDate: '2025-01-28'
-    }
-  },
-  {
-    id: 'prod-002',
-    name: 'Tomates Cherry',
-    batchNumber: 'BATCH-2025-002',
-    productionDate: '2025-01-29',
-    expirationDate: testDates.today, // Vence hoy
-    status: ProductStatus.ACTIVE,
-    currentLocation: 'Finca San Pedro - Invernadero B',
-    temperature: 6,
-    humidity: 80,
-    producer: {
-      id: 'producer-001',
-      name: 'Finca San Pedro',
-      location: 'Valle Central, Costa Rica'
-    },
-    metadata: {
-      variety: 'Cherry',
-      weight: '15kg',
-      certification: 'Orgánico',
-      harvestDate: '2025-01-29'
-    }
-  },
-  {
-    id: 'prod-003',
-    name: 'Fresas Orgánicas',
-    batchNumber: 'BATCH-2025-003',
-    productionDate: '2025-01-29',
-    expirationDate: testDates.tomorrow, // Vence mañana
-    status: ProductStatus.ACTIVE,
-    currentLocation: 'Finca San Pedro - Campo C',
-    temperature: 2,
-    humidity: 90,
-    producer: {
-      id: 'producer-001',
-      name: 'Finca San Pedro',
-      location: 'Valle Central, Costa Rica'
-    },
-    metadata: {
-      variety: 'Albión',
-      weight: '10kg',
-      certification: 'Orgánico',
-      harvestDate: '2025-01-29'
-    }
-  },
-  {
-    id: 'prod-004',
-    name: 'Brócoli Fresco',
-    batchNumber: 'BATCH-2025-004',
-    productionDate: '2025-01-27',
-    expirationDate: testDates.threeDays, // Vence en 3 días
-    status: ProductStatus.ACTIVE,
-    currentLocation: 'Finca San Pedro - Campo D',
-    temperature: 1,
-    humidity: 95,
-    producer: {
-      id: 'producer-001',
-      name: 'Finca San Pedro',
-      location: 'Valle Central, Costa Rica'
-    },
-    metadata: {
-      variety: 'Calabrese',
-      weight: '30kg',
-      certification: 'Orgánico',
-      harvestDate: '2025-01-27'
-    }
-  },
-  {
-    id: 'prod-005',
-    name: 'Café Arábica Premium',
-    batchNumber: 'BATCH-2025-005',
-    productionDate: '2025-01-10',
-    expirationDate: testDates.oneMonth, // Vence en 1 mes
-    status: ProductStatus.IN_TRANSIT,
-    currentLocation: 'Centro de Procesamiento',
-    temperature: 20,
-    humidity: 45,
-    producer: {
-      id: 'producer-001',
-      name: 'Finca San Pedro',
-      location: 'Valle Central, Costa Rica'
-    },
-    metadata: {
-      variety: 'Arábica',
-      weight: '100kg',
-      certification: 'Fair Trade',
-      harvestDate: '2025-01-05'
-    }
-  },
-  {
-    id: 'prod-006',
-    name: 'Manzanas Rojas Orgánicas',
-    batchNumber: 'BATCH-2025-006',
-    productionDate: '2025-01-15',
-    expirationDate: testDates.oneWeek, // Vence en 1 semana
-    status: ProductStatus.ACTIVE,
-    currentLocation: 'Finca San Pedro - Cámara Fría',
-    temperature: 0,
-    humidity: 85,
-    producer: {
-      id: 'producer-001',
-      name: 'Finca San Pedro',
-      location: 'Valle Central, Costa Rica'
-    },
-    metadata: {
-      variety: 'Red Delicious',
-      weight: '500kg',
-      certification: 'Orgánico',
-      harvestDate: '2025-01-15'
-    }
-  }
-];
+// Datos reales del blockchain - sin mock data
 
 export default function ProducerDashboard() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuth();
   const [stats, setStats] = useState<DashboardStats>(mockStats);
-  const [products, setProducts] = useState<Product[]>(mockProducts);
+  const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentUser, setCurrentUser] = useState<any>(null);
@@ -197,45 +61,136 @@ export default function ProducerDashboard() {
   } = useNotifications(products);
 
   useEffect(() => {
+    let timeoutId: NodeJS.Timeout | null = null;
+    let mounted = true;
+    
     // Simplified auth check
     if (typeof window !== 'undefined') {
       const storedRole = localStorage.getItem('userRole');
       const storedUser = localStorage.getItem('authUser');
+      const storedToken = localStorage.getItem('authToken');
       
-      if (!storedRole || !storedUser) {
-        router.push('/auth');
+      console.log('🔍 Dashboard auth check:', {
+        hasRole: !!storedRole,
+        hasUser: !!storedUser,
+        hasToken: !!storedToken,
+        role: storedRole
+      });
+      
+      if (!storedRole || !storedUser || !storedToken) {
+        console.log('❌ Missing auth data, redirecting to login');
+        if (mounted) {
+          router.push('/auth');
+        }
         return;
       }
       
       if (storedRole !== UserRole.PRODUCER) {
-        toast.error('Acceso denegado: Se requiere rol de Productor');
-        router.push('/auth');
+        if (mounted) {
+          toast.error('Acceso denegado: Se requiere rol de Productor');
+          router.push('/auth');
+        }
         return;
       }
       
       // Set current user from localStorage
       try {
-        setCurrentUser(JSON.parse(storedUser));
+        const parsedUser = JSON.parse(storedUser);
+        if (mounted) {
+          setCurrentUser(parsedUser);
+          console.log('✅ Usuario cargado desde localStorage:', parsedUser);
+          
+          // Solo cargar datos después de confirmar autenticación
+          timeoutId = setTimeout(() => {
+            if (mounted) {
+              console.log('⏰ Cargando datos del dashboard después de autenticación...');
+              loadDashboardData();
+            }
+          }, 100); // Pequeño delay para asegurar que el token esté disponible
+        }
       } catch (error) {
         console.error('Error parsing user:', error);
+        if (mounted) {
+          router.push('/auth');
+        }
       }
     }
     
-    loadDashboardData();
+    // Cleanup function para evitar duplicados
+    return () => {
+      mounted = false;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
   }, []);
 
   const loadDashboardData = async () => {
     setIsLoading(true);
     try {
-      // In a real implementation, this would fetch from the API
-      // const dashboardData = await api.get('/dashboard/producer');
-      // setStats(dashboardData.stats);
-      // setProducts(dashboardData.products);
+      console.log('🔄 Cargando productos del usuario...');
       
-      toast.success('Dashboard actualizado');
-    } catch (error) {
-      toast.error('Error al cargar datos del dashboard');
-      console.error('Dashboard error:', error);
+      // Importar funciones de API para cargar productos reales
+      const { getMyProducts, getUserStats } = await import('@/utils/api');
+      
+      // Cargar productos del usuario autenticado
+      const productsResponse = await getMyProducts();
+      
+      if (productsResponse.success && productsResponse.data) {
+        console.log('✅ Productos cargados desde blockchain:', productsResponse.data);
+        
+        // Convertir FoodAsset[] a Product[] para compatibilidad con la UI
+        const convertedProducts = productsResponse.data.map((foodAsset: any) => ({
+          id: foodAsset.id,
+          name: foodAsset.name,
+          batchNumber: foodAsset.batchNumber,
+          productionDate: foodAsset.productionDate,
+          expirationDate: foodAsset.expirationDate,
+          status: foodAsset.status || ProductStatus.ACTIVE,
+          currentLocation: foodAsset.origin?.farmName || 'Sin ubicación',
+          temperature: foodAsset.storageConditions?.temperature || 4,
+          humidity: foodAsset.storageConditions?.humidity || 85,
+          producer: {
+            id: 'current-user',
+            name: foodAsset.origin?.farmName || 'Finca Demo',
+            location: foodAsset.origin?.location || 'Sin ubicación'
+          },
+          metadata: {
+            variety: foodAsset.variety || 'Sin especificar',
+            weight: `${foodAsset.weight}kg` || 'Sin especificar',
+            certification: foodAsset.certifications?.join(', ') || 'Sin certificación',
+            harvestDate: foodAsset.productionDate
+          }
+        }));
+        
+        setProducts(convertedProducts);
+        
+        // Calcular estadísticas básicas
+        const totalProducts = convertedProducts.length;
+        const activeProducts = convertedProducts.filter(p => p.status === ProductStatus.ACTIVE).length;
+        const expiringSoon = convertedProducts.filter(p => isExpiringSoon(p.expirationDate)).length;
+        
+        setStats({
+          totalProducts,
+          activeProducts,
+          expiringSoon,
+          transfers: 0 // Por ahora 0
+        });
+        
+        toast.success(`Dashboard actualizado - ${totalProducts} productos cargados`);
+      } else {
+        console.log('ℹ️ No se encontraron productos');
+        // Mantener arrays vacíos si no hay productos reales
+        setProducts([]);
+        toast.info('No hay productos registrados. Crea tu primer producto.');
+      }
+      
+    } catch (error: any) {
+      console.error('❌ Error al cargar datos del dashboard:', error);
+      toast.error(`Error al cargar datos: ${error.message}`);
+      
+      // Mantener arrays vacíos en caso de error
+      setProducts([]);
     } finally {
       setIsLoading(false);
     }
@@ -367,6 +322,10 @@ export default function ProducerDashboard() {
                 >
                   {isLoading ? 'Actualizando...' : 'Actualizar'}
                 </button>
+                
+                <Link href="/profile" className="btn-secondary">
+                  Mi Perfil
+                </Link>
                 
                 <Link href="/auth" className="btn-primary">
                   Cambiar Usuario

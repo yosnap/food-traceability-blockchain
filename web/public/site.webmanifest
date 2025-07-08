@@ -1,0 +1,14 @@
+{
+  "name": "Food Traceability",
+  "short_name": "FoodTrace",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ],
+  "theme_color": "#10b981",
+  "background_color": "#ffffff",
+  "display": "standalone"
+}

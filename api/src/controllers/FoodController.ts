@@ -3,7 +3,7 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { fabricService } from '../services/FabricService.js';
+import { fabricGatewayService } from '../services/FabricGatewayService.js';
 import { body, param, query, validationResult } from 'express-validator';
 
 export class FoodController {
@@ -13,7 +13,7 @@ export class FoodController {
      */
     static async ping(req: Request, res: Response, next: NextFunction): Promise<void> {
         try {
-            const result = await fabricService.ping();
+            const result = await fabricGatewayService.ping();
             
             res.json({
                 success: true,
@@ -63,12 +63,26 @@ export class FoodController {
                 allergens,
                 weight,
                 volume,
-                brand
+                brand,
+                signature,
+                walletAddress,
+                certifications,
+                variety
             } = req.body;
 
-            // Preparar datos para el chaincode
+            // Log de firma si está presente
+            if (signature && walletAddress) {
+                console.log('🔏 Producto firmado digitalmente:');
+                console.log('  📍 Wallet:', walletAddress);
+                console.log('  ✍️ Firma:', signature.substring(0, 20) + '...');
+            }
+
+            // Generar ID único para el producto si no se proporciona
+            const productId = id || `PROD-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+            // Preparar datos para el chaincode (solo parámetros que acepta)
             const productData = {
-                id,
+                id: productId,
                 batchNumber,
                 name,
                 category,
@@ -76,22 +90,35 @@ export class FoodController {
                 quantity: parseInt(quantity),
                 productionDate,
                 expirationDate,
-                originData: JSON.stringify(origin),
-                storageConditionsData: JSON.stringify(storageConditions),
+                originData: typeof origin === 'object' ? JSON.stringify(origin) : (origin || '{}'),
+                storageConditionsData: typeof storageConditions === 'object' ? JSON.stringify(storageConditions) : (storageConditions || '{}'),
                 allergens: JSON.stringify(allergens || []),
                 weight: weight ? parseFloat(weight) : undefined,
                 volume: volume ? parseFloat(volume) : undefined,
                 brand
             };
 
+            // Log adicional de datos firmados (no se envían al chaincode pero quedan en logs)
+            if (signature && walletAddress) {
+                console.log('📄 Datos adicionales del producto firmado:');
+                console.log('  🏷️ Certificaciones:', Array.isArray(certifications) ? certifications.join(', ') : (certifications || 'Ninguna'));
+                console.log('  🌱 Variedad:', variety || 'No especificada');
+            }
+
+            // Obtener el userId del usuario autenticado
+            const authenticatedUser = (req as any).user;
+            const producerUserId = authenticatedUser?.userId || 'User1@org1.example.com';
+            
+            console.log('👤 Creando producto como usuario:', producerUserId);
+
             // Ejecutar transacción en el chaincode
-            const result = await fabricService.createFoodAsset(productData);
+            const result = await fabricGatewayService.createFoodAsset(producerUserId, productData);
 
             res.status(201).json({
                 success: true,
                 message: 'Producto creado exitosamente',
                 data: {
-                    productId: id,
+                    productId,
                     transactionResult: result
                 },
                 timestamp: new Date().toISOString()
@@ -109,7 +136,7 @@ export class FoodController {
         try {
             const { id } = req.params;
 
-            const product = await fabricService.getFoodAsset(id);
+            const product = await fabricGatewayService.getFoodAsset(id);
 
             res.json({
                 success: true,
@@ -134,7 +161,7 @@ export class FoodController {
             // Si no se especifica owner, usar el usuario actual
             const targetOwner = ownerAddress || req.user?.address;
 
-            const expiringProducts = await fabricService.getExpiringProducts(
+            const expiringProducts = await fabricGatewayService.getExpiringProducts(
                 daysAhead,
                 targetOwner,
                 category
@@ -200,7 +227,7 @@ export class FoodController {
                 notes
             };
 
-            const result = await fabricService.transferFoodAsset(transferData);
+            const result = await fabricGatewayService.transferFoodAsset(transferData);
 
             res.json({
                 success: true,
@@ -227,7 +254,7 @@ export class FoodController {
             const { productId } = req.params;
             const { consumedDate, rating, notes } = req.body;
 
-            const result = await fabricService.markAsConsumed(
+            const result = await fabricGatewayService.markAsConsumed(
                 productId,
                 consumedDate,
                 rating ? parseInt(rating) : undefined,
@@ -271,7 +298,7 @@ export class FoodController {
 
             // TODO: Implementar consulta de productos por propietario en FabricService
             // Por ahora, usar getExpiringProducts con un rango amplio
-            const allProducts = await fabricService.getExpiringProducts(365, userAddress);
+            const allProducts = await fabricGatewayService.getExpiringProducts(365, userAddress);
 
             res.json({
                 success: true,
@@ -296,7 +323,7 @@ export class FoodController {
             const { category } = req.params;
             
             // Usar getExpiringProducts con filtro de categoría y rango amplio
-            const products = await fabricService.getExpiringProducts(365, undefined, category);
+            const products = await fabricGatewayService.getExpiringProducts(365, undefined, category);
 
             res.json({
                 success: true,
@@ -332,9 +359,9 @@ export class FoodController {
             }
 
             // Obtener productos del usuario
-            const allProducts = await fabricService.getExpiringProducts(365, userAddress);
-            const expiringProducts = await fabricService.getExpiringProducts(7, userAddress);
-            const criticalProducts = await fabricService.getExpiringProducts(1, userAddress);
+            const allProducts = await fabricGatewayService.getExpiringProducts(365, userAddress);
+            const expiringProducts = await fabricGatewayService.getExpiringProducts(7, userAddress);
+            const criticalProducts = await fabricGatewayService.getExpiringProducts(1, userAddress);
 
             // Calcular estadísticas
             const stats = {

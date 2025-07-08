@@ -22,9 +22,17 @@ declare global {
 
 export const authMiddleware = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
+        console.log('🔍 Auth middleware - Request:', {
+            url: req.url,
+            method: req.method,
+            hasAuthHeader: !!req.headers.authorization,
+            authHeaderPreview: req.headers.authorization ? req.headers.authorization.substring(0, 30) + '...' : 'none'
+        });
+        
         const authHeader = req.headers.authorization;
         
         if (!authHeader) {
+            console.log('❌ Auth middleware - No auth header');
             res.status(401).json({
                 success: false,
                 error: {
@@ -41,7 +49,14 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
             ? authHeader.slice(7) 
             : authHeader;
 
+        console.log('🔍 Auth middleware - Token extracted:', {
+            tokenLength: token.length,
+            tokenPreview: token.substring(0, 20) + '...',
+            isBearer: authHeader.startsWith('Bearer ')
+        });
+
         if (!token) {
+            console.log('❌ Auth middleware - No token after extraction');
             res.status(401).json({
                 success: false,
                 error: {
@@ -53,18 +68,18 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
             return;
         }
 
-        // Para desarrollo: decodificar token simple o usar usuarios mock
-        let user;
+        // Validar JWT token real
+        console.log('🔍 Auth middleware - Validating JWT...');
+        let user = await validateJWT(token);
         
-        if (process.env.NODE_ENV === 'development') {
-            // En desarrollo, usar usuarios mock basados en el token
+        // Fallback a usuarios mock solo si la validación JWT falla y estamos en desarrollo
+        if (!user && process.env.NODE_ENV === 'development') {
+            console.log('🔄 JWT validation failed, trying mock users...');
             user = getMockUser(token);
-        } else {
-            // En producción, validar JWT real
-            user = await validateJWT(token);
         }
 
         if (!user) {
+            console.log('❌ Auth middleware - No user found after validation');
             res.status(401).json({
                 success: false,
                 error: {
@@ -75,6 +90,12 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
             });
             return;
         }
+
+        console.log('✅ Auth middleware - User authenticated:', {
+            address: user.address,
+            role: user.role,
+            name: user.name
+        });
 
         // Agregar usuario al request
         req.user = user;
@@ -102,6 +123,12 @@ function getMockUser(token: string) {
             address: '0x1234567890123456789012345678901234567890',
             role: 'PRODUCER',
             name: 'Agricultor Juan',
+            isVerified: true
+        },
+        'factory-token': {
+            address: '0x2234567890123456789012345678901234567890',
+            role: 'FACTORY',
+            name: 'Fábrica AlimentosPro',
             isVerified: true
         },
         'processor-token': {
@@ -146,18 +173,35 @@ function getMockUser(token: string) {
 }
 
 /**
- * Validación real de JWT para producción
+ * Validación real de JWT 
  */
 async function validateJWT(token: string): Promise<any> {
     try {
-        // TODO: Implementar validación real con jsonwebtoken
-        // const decoded = jwt.verify(token, process.env.JWT_SECRET!);
-        // return decoded;
+        // Importar jwt dinámicamente
+        const jwt = await import('jsonwebtoken');
+        const jwtSecret = process.env.JWT_SECRET || 'your-secret-key';
         
-        // Por ahora, retornar null para forzar error en producción sin JWT real
-        return null;
+        const decoded = jwt.default.verify(token, jwtSecret) as any;
         
-    } catch (error) {
+        console.log('✅ JWT validado exitosamente:', {
+            userId: decoded.userId,
+            role: decoded.role,
+            address: decoded.address
+        });
+        
+        // Mapear el formato del JWT al formato esperado por el middleware
+        return {
+            address: decoded.address,
+            role: decoded.role.toUpperCase(), // Asegurar mayúsculas
+            name: decoded.name,
+            isVerified: true,
+            userId: decoded.userId,
+            mspId: decoded.mspId,
+            organizationName: decoded.organizationName
+        };
+        
+    } catch (error: any) {
+        console.log('❌ Error validando JWT:', error.message);
         return null;
     }
 }

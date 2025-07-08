@@ -41,7 +41,7 @@ export class FoodTraceabilityContract extends Contract {
     @Transaction()
     public async initLedger(ctx: Context): Promise<void> {
         console.log('Inicializando ledger de trazabilidad de alimentos...');
-        
+
         // Crear registro de inicialización
         const initRecord = {
             contract: 'FoodTraceabilityContract',
@@ -51,7 +51,7 @@ export class FoodTraceabilityContract extends Contract {
         };
 
         await ChainUtils.putAssetToLedger(ctx, 'INIT_RECORD', initRecord);
-        
+
         ChainUtils.emitEvent(ctx, 'LedgerInitialized', {
             message: 'Ledger de trazabilidad de alimentos inicializado',
             timestamp: DateUtils.getCurrentISOString()
@@ -75,10 +75,10 @@ export class FoodTraceabilityContract extends Contract {
         role: string,
         email: string,
         phone: string,
-        locationData: string, // JSON string de Location
+        locationData: string,
         licenseNumber?: string
     ): Promise<string> {
-        
+
         // Validar parámetros básicos
         if (!ValidationUtils.isValidBlockchainAddress(address)) {
             throw new Error('Dirección blockchain inválida');
@@ -163,9 +163,9 @@ export class FoodTraceabilityContract extends Contract {
         phone?: string,
         locationData?: string
     ): Promise<string> {
-        
+
         const user = await ChainUtils.getAssetFromLedger<User>(ctx, `USER_${address}`);
-        
+
         // Solo el propio usuario o un admin puede actualizar
         const clientId = ChainUtils.getClientId(ctx);
         if (user.address !== clientId && !ChainUtils.hasRole(ctx, 'admin')) {
@@ -227,157 +227,83 @@ export class FoodTraceabilityContract extends Contract {
     // ==========================================
 
     /**
-     * Crea un nuevo producto alimentario
+     * Crea un nuevo producto alimentario con estructura simplificada
      */
     @Transaction()
     public async createFoodAsset(
         ctx: Context,
-        id: string,
-        batchNumber: string,
+        tokenId: string,
+        ownerAddress: string,
         name: string,
-        category: string,
-        description: string,
-        quantity: number,
-        productionDate: string,
-        expirationDate: string,
-        originData: string, // JSON string de OriginInfo
-        storageConditionsData: string, // JSON string de StorageConditions
-        allergens: string, // JSON array de alérgenos
-        weight?: number,
-        volume?: number,
-        brand?: string
+        amount: number,
+        attributesJSON: string // JSON string con todos los atributos del producto
     ): Promise<string> {
 
-        // Validar ID y batch number
-        if (!ValidationUtils.isValidId(id)) {
-            throw new Error('ID de producto inválido');
+        console.log(`🏭 Creando producto ${tokenId} para ${ownerAddress}`);
+
+        // Validar parámetros básicos
+        if (!tokenId || !ownerAddress || !name || amount <= 0) {
+            throw new Error('Parámetros de producto inválidos');
         }
 
-        if (!ValidationUtils.isValidBatchNumber(batchNumber)) {
-            throw new Error('Número de lote inválido');
-        }
-
-        // Verificar que el producto no existe
-        const productExists = await ChainUtils.assetExists(ctx, `FOOD_${id}`);
-        if (productExists) {
-            throw new Error(`Producto ${id} ya existe`);
-        }
-
-        // Validar categoría
-        if (!Object.values(FoodCategory).includes(category as FoodCategory)) {
-            throw new Error(`Categoría inválida: ${category}`);
-        }
-
-        // Validar fechas
-        if (!ValidationUtils.isValidISODate(productionDate)) {
-            throw new Error('Fecha de producción inválida');
-        }
-
-        if (!ValidationUtils.isValidExpirationDate(expirationDate, productionDate)) {
-            throw new Error('Fecha de caducidad inválida');
-        }
-
-        // Validar cantidad
-        if (!ValidationUtils.isValidQuantity(quantity)) {
-            throw new Error('Cantidad inválida');
-        }
-
-        // Parsear datos complejos
-        let origin: OriginInfo;
-        let storageConditions: any;
-        let allergensList: string[];
-
+        // Parsear atributos del producto
+        let attributes: any;
         try {
-            origin = JSON.parse(originData);
-            storageConditions = JSON.parse(storageConditionsData);
-            allergensList = JSON.parse(allergens);
+            attributes = JSON.parse(attributesJSON);
         } catch (error) {
-            throw new Error('Error al parsear datos del producto');
+            throw new Error('Atributos JSON inválidos');
         }
 
-        // Validar información de origen
-        if (!ValidationUtils.isValidOriginInfo(origin)) {
-            throw new Error('Información de origen inválida');
+        // Crear clave única para el producto
+        const productKey = `product:${tokenId}:${ownerAddress}`;
+        
+        // Verificar que el producto no existe
+        const existingProductBytes = await ctx.stub.getState(productKey);
+        if (existingProductBytes && existingProductBytes.length > 0) {
+            throw new Error(`Producto ${tokenId} ya existe para el propietario ${ownerAddress}`);
         }
 
-        // Obtener información del usuario actual
-        const currentUserId = ChainUtils.getClientId(ctx);
-        const currentUser = await ChainUtils.getAssetFromLedger<User>(ctx, `USER_${currentUserId}`);
-
-        // Verificar que el usuario tiene rol de PRODUCER
-        if (currentUser.role !== UserRole.PRODUCER) {
-            throw new Error('Solo los productores pueden crear productos alimentarios');
-        }
-
-        // Crear el activo alimentario
-        const foodAsset: FoodAsset = {
-            id,
-            batchNumber,
-            name: ValidationUtils.sanitizeString(name),
-            category: category as FoodCategory,
-            description: ValidationUtils.sanitizeString(description),
-            brand: brand ? ValidationUtils.sanitizeString(brand) : undefined,
-            weight,
-            volume,
-            quantity,
-            
-            productionDate,
-            expirationDate,
-            shelfLife: DateUtils.daysDifference(productionDate, expirationDate),
-            
-            allergens: allergensList,
-            qualityCertifications: [],
-            
-            origin,
-            currentOwner: currentUserId,
-            currentOwnerRole: currentUser.role,
-            ownershipHistory: [],
-            currentLocation: currentUser.location,
-            
-            status: FoodStatus.PRODUCED,
-            storageConditions,
-            isRecalled: false,
-            
-            createdAt: DateUtils.getCurrentISOString(),
-            updatedAt: DateUtils.getCurrentISOString(),
-            createdBy: currentUserId,
-            lastUpdatedBy: currentUserId,
-            version: 1
+        // Crear estructura simplificada del producto basada en TokenizarContract
+        const product = {
+            id: tokenId,
+            owner: ownerAddress,
+            name: name,
+            amount: amount,
+            attributes: attributes,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
         };
 
-        // Validar activo completo
-        if (!ValidationUtils.isValidFoodAsset(foodAsset)) {
-            throw new Error('Datos del producto inválidos');
-        }
-
-        // Guardar producto
-        await ChainUtils.putAssetToLedger(ctx, `FOOD_${id}`, foodAsset);
+        // Guardar producto en el ledger
+        await ctx.stub.putState(productKey, Buffer.from(JSON.stringify(product)));
 
         // Emitir evento
-        ChainUtils.emitEvent(ctx, 'FoodAssetCreated', {
-            id,
+        ctx.stub.setEvent('ProductCreated', Buffer.from(JSON.stringify({
+            tokenId,
+            ownerAddress,
             name,
-            category,
-            producer: currentUserId,
-            expirationDate,
-            timestamp: DateUtils.getCurrentISOString()
-        });
+            amount,
+            timestamp: new Date().toISOString()
+        })));
 
-        return `Producto alimentario ${name} creado exitosamente con ID ${id}`;
+        console.log(`✅ Producto ${tokenId} creado exitosamente`);
+        return `Producto ${name} creado exitosamente con ID ${tokenId}`;
     }
 
     /**
-     * Obtiene información de un producto alimentario
+     * Obtiene información de un producto alimentario (simplificado)
      */
     @Transaction(false)
     @Returns('string')
-    public async getFoodAsset(ctx: Context, id: string): Promise<string> {
-        if (!ValidationUtils.isValidId(id)) {
-            throw new Error('ID de producto inválido');
+    public async getFoodAsset(ctx: Context, tokenId: string, ownerAddress: string): Promise<string> {
+        const productKey = `product:${tokenId}:${ownerAddress}`;
+        
+        const productBytes = await ctx.stub.getState(productKey);
+        if (!productBytes || productBytes.length === 0) {
+            throw new Error(`Producto ${tokenId} no encontrado para ${ownerAddress}`);
         }
 
-        const foodAsset = await ChainUtils.getAssetFromLedger<FoodAsset>(ctx, `FOOD_${id}`);
-        return JSON.stringify(foodAsset);
+        return productBytes.toString();
     }
 
     /**
@@ -466,8 +392,8 @@ export class FoodTraceabilityContract extends Contract {
 
         // Validar tipo de transferencia para los roles
         if (!ValidationUtils.isValidTransferTypeForRoles(
-            transferType as TransferType, 
-            currentUser.role, 
+            transferType as TransferType,
+            currentUser.role,
             newOwnerUser.role
         )) {
             throw new Error(`Transferencia ${transferType} no válida entre ${currentUser.role} y ${newOwnerUser.role}`);
@@ -564,14 +490,14 @@ export class FoodTraceabilityContract extends Contract {
 
         // Construir consulta
         const { startDate, endDate } = DateUtils.getExpiryQueryDates(daysAhead);
-        
+
         const queryFilters: any = {
             expirationDate: {
                 operator: '$gte',
                 value: startDate
             },
             status: {
-                operator: '$ne', 
+                operator: '$ne',
                 value: FoodStatus.EXPIRED
             }
         };
@@ -591,7 +517,7 @@ export class FoodTraceabilityContract extends Contract {
 
         try {
             const assets = await ChainUtils.executeRichQuery<FoodAsset>(ctx, queryString);
-            
+
             const expiringProducts: ExpiringProduct[] = assets
                 .filter(asset => {
                     const daysRemaining = DateUtils.daysUntil(asset.expirationDate);
@@ -674,7 +600,7 @@ export class FoodTraceabilityContract extends Contract {
         }
 
         const consumptionDate = consumedDate || DateUtils.getCurrentISOString();
-        
+
         // Validar fecha de consumo
         if (!ValidationUtils.isValidISODate(consumptionDate)) {
             throw new Error('Fecha de consumo inválida');
@@ -800,11 +726,11 @@ export class FoodTraceabilityContract extends Contract {
     }
 
     /**
-     * Función ping para verificar conectividad
+     * Función ping para verificar conectividad (simplificada)
      */
     @Transaction(false)
     @Returns('string')
     public async ping(ctx: Context): Promise<string> {
-        return `Pong! FoodTraceabilityContract está funcionando. Timestamp: ${DateUtils.getCurrentISOString()}`;
+        return `Pong! FoodTraceabilityContract está funcionando. Timestamp: ${new Date().toISOString()}`;
     }
 }

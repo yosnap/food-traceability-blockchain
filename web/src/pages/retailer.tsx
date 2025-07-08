@@ -25,7 +25,7 @@ import SafeDate from '@/components/SafeDate';
 import TransferModal from '@/components/TransferModal';
 import NotificationBell from '@/components/NotificationBell';
 import { useNotifications } from '@/hooks/useNotifications';
-import { generateTestExpirationDates, calculateExpirationInfo } from '@/utils/expirationUtils';
+import { calculateExpirationInfo } from '@/utils/expirationUtils';
 
 interface RetailerStats {
   totalInventory: number;
@@ -41,105 +41,13 @@ const mockStats: RetailerStats = {
   lowStock: 12
 };
 
-// Generar fechas de vencimiento variadas para testing
-const testDates = generateTestExpirationDates();
-
-const mockProducts: Product[] = [
-  {
-    id: 'ret-001',
-    name: 'Pan Fresco Artesanal',
-    batchNumber: 'RET-2025-001',
-    productionDate: '2025-01-30',
-    expirationDate: testDates.expired, // Vencido hace 2 días
-    status: ProductStatus.ACTIVE,
-    currentLocation: 'Supermercado Valle Verde - Panadería',
-    temperature: 20,
-    humidity: 60,
-    producer: {
-      id: 'retailer-001',
-      name: 'Supermercado Valle Verde',
-      location: 'Centro Comercial Plaza Norte'
-    },
-    metadata: {
-      variety: 'Artesanal',
-      weight: '20 unidades',
-      certification: 'Artesanal',
-      harvestDate: '2025-01-30'
-    }
-  },
-  {
-    id: 'ret-002',
-    name: 'Leche Fresca Pasteurizada',
-    batchNumber: 'RET-2025-002',
-    productionDate: '2025-01-29',
-    expirationDate: testDates.tomorrow, // Vence mañana
-    status: ProductStatus.ACTIVE,
-    currentLocation: 'Supermercado Valle Verde - Refrigerados',
-    temperature: 2,
-    humidity: 60,
-    producer: {
-      id: 'retailer-001',
-      name: 'Supermercado Valle Verde',
-      location: 'Centro Comercial Plaza Norte'
-    },
-    metadata: {
-      variety: 'Pasteurizada',
-      weight: '50L',
-      certification: 'HACCP',
-      harvestDate: '2025-01-28'
-    }
-  },
-  {
-    id: 'ret-003',
-    name: 'Manzanas Orgánicas',
-    batchNumber: 'RET-2025-003',
-    productionDate: '2025-01-25',
-    expirationDate: testDates.oneWeek, // Vence en 1 semana
-    status: ProductStatus.ACTIVE,
-    currentLocation: 'Supermercado Valle Verde - Sección Frutas',
-    temperature: 4,
-    humidity: 85,
-    producer: {
-      id: 'retailer-001',
-      name: 'Supermercado Valle Verde',
-      location: 'Centro Comercial Plaza Norte'
-    },
-    metadata: {
-      variety: 'Red Delicious',
-      weight: '30kg',
-      certification: 'Orgánico',
-      harvestDate: '2025-01-20'
-    }
-  },
-  {
-    id: 'ret-004',
-    name: 'Pescado Fresco del Día',
-    batchNumber: 'RET-2025-004',
-    productionDate: '2025-01-30',
-    expirationDate: testDates.today, // Vence hoy
-    status: ProductStatus.ACTIVE,
-    currentLocation: 'Supermercado Valle Verde - Pescadería',
-    temperature: 0,
-    humidity: 95,
-    producer: {
-      id: 'retailer-001',
-      name: 'Supermercado Valle Verde',
-      location: 'Centro Comercial Plaza Norte'
-    },
-    metadata: {
-      variety: 'Salmón',
-      weight: '15kg',
-      certification: 'Fresco',
-      harvestDate: '2025-01-30'
-    }
-  }
-];
+// Datos reales del blockchain - sin mock data
 
 export default function RetailerDashboard() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuth();
   const [stats, setStats] = useState<RetailerStats>(mockStats);
-  const [products, setProducts] = useState<Product[]>(mockProducts);
+  const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [showTransferModal, setShowTransferModal] = useState(false);

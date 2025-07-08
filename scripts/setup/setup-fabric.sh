@@ -74,45 +74,45 @@ print_status "Entrando al directorio test-network..."
 print_status "Limpiando redes anteriores..."
 ./network.sh down
 
-# Iniciar la red con CA y CouchDB
+# Iniciar la red con CA y LevelDB (sin CouchDB)
 print_status "Iniciando red de Hyperledger Fabric..."
-print_status "Configuración: test-network + CA + CouchDB"
+print_status "Configuración: test-network + CA + LevelDB (sin CouchDB)"
 
-./network.sh up createChannel -ca -s couchdb -c mychannel
+./network.sh up createChannel -ca -c mychannel
 
 if [ $? -eq 0 ]; then
     print_success "🎉 Red de Hyperledger Fabric iniciada correctamente!"
-    
+
     echo ""
     print_status "📋 Estado de la red:"
     print_status "- Canal: mychannel"
     print_status "- Organizaciones: Org1MSP, Org2MSP"
     print_status "- CA: Habilitada"
-    print_status "- Base de datos: CouchDB"
-    
+    print_status "- Base de datos: LevelDB (embebida en peers)"
+
     echo ""
     print_status "🔧 Verificando contenedores Docker:"
     docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
-    
+
     echo ""
     print_status "🚀 Desplegando chaincode con CCAAS..."
-    
+
     # Desplegar chaincode usando CCAAS
     ./network.sh deployCCAAS -ccn food-traceability -ccp ../../chaincode
-    
+
     if [ $? -eq 0 ]; then
         print_success "🎉 Chaincode desplegado exitosamente con CCAAS!"
-        
+
         echo ""
         print_status "🧪 Probando chaincode..."
-        
+
         # Configurar variables para invocar chaincode
         export CORE_PEER_TLS_ENABLED=true
         export CORE_PEER_LOCALMSPID="Org1MSP"
         export CORE_PEER_TLS_ROOTCERT_FILE="$PROJECT_ROOT/fabric-samples/test-network/organizations/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt"
         export CORE_PEER_MSPCONFIGPATH="$PROJECT_ROOT/fabric-samples/test-network/organizations/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp"
         export CORE_PEER_ADDRESS=localhost:7051
-        
+
         # Probar con ping
         peer chaincode invoke \
             -o localhost:7050 \
@@ -126,13 +126,13 @@ if [ $? -eq 0 ]; then
             --peerAddresses localhost:9051 \
             --tlsRootCertFiles "$PROJECT_ROOT/fabric-samples/test-network/organizations/peerOrganizations/org2.example.com/peers/peer0.org2.example.com/tls/ca.crt" \
             -c '{"function":"ping","Args":[]}'
-        
+
         if [ $? -eq 0 ]; then
             print_success "✅ Chaincode respondió correctamente al ping!"
         else
             print_warning "⚠️ Chaincode desplegado pero ping falló (normal en algunos casos)"
         fi
-        
+
         echo ""
         print_status "📋 Información del despliegue:"
         print_status "- Chaincode: food-traceability"
@@ -144,7 +144,7 @@ if [ $? -eq 0 ]; then
         print_status "📝 Puedes intentar manualmente:"
         print_status "./network.sh deployCCAAS -ccn food-traceability -ccp ../../chaincode"
     fi
-    
+
 else
     print_error "Error al iniciar la red de Fabric"
     exit 1
@@ -174,7 +174,7 @@ EOF
 
         print_status "Archivo .env.fabric creado para cargar variables en futuras sesiones"
         print_status "Para cargar las variables: source .env.fabric"
-        
+
         echo ""
         print_success "🎉 ¡Hyperledger Fabric + CCAAS configurado completamente!"
         print_status "🚀 Próximo paso: Configurar la API backend"

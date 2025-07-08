@@ -118,6 +118,7 @@ export const getCategoryIcon = (category: FoodCategory): string => {
 export const getRoleLabel = (role: UserRole): string => {
   const labels: Record<UserRole, string> = {
     [UserRole.PRODUCER]: 'Productor',
+    [UserRole.FACTORY]: 'Fábrica',
     [UserRole.PROCESSOR]: 'Procesador',
     [UserRole.DISTRIBUTOR]: 'Distribuidor',
     [UserRole.RETAILER]: 'Minorista',
@@ -130,6 +131,7 @@ export const getRoleLabel = (role: UserRole): string => {
 export const getRoleColor = (role: UserRole): string => {
   const colors: Record<UserRole, string> = {
     [UserRole.PRODUCER]: 'green',
+    [UserRole.FACTORY]: 'indigo',
     [UserRole.PROCESSOR]: 'blue',
     [UserRole.DISTRIBUTOR]: 'purple',
     [UserRole.RETAILER]: 'orange',

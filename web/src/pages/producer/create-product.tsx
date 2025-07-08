@@ -10,7 +10,7 @@ import {
   MapPinIcon,
   TagIcon,
   ScaleIcon,
-  ThermometerIcon,
+  FireIcon,
   InformationCircleIcon
 } from '@heroicons/react/24/outline';
 import { useAuth } from '@/hooks/useAuth';
@@ -163,28 +163,99 @@ export default function CreateProduct() {
       // Generar número de lote si no se proporcionó
       const batchNumber = form.batchNumber.trim() || generateBatchNumber();
       
-      // Simular creación del producto
+      // Generar ID único para el producto
+      const productId = `PROD-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Preparar datos del producto para la API
       const productData = {
-        ...form,
+        id: productId,
+        name: form.name,
+        category: form.category,
+        description: form.description,
+        quantity: form.quantity,
+        weight: parseFloat(form.weight) || 0,
+        volume: 0, // Calcular si es necesario
+        productionDate: form.productionDate,
+        expirationDate: form.expirationDate,
         batchNumber,
-        producer: user?.name || 'Productor Demo',
-        createdAt: new Date().toISOString()
+        origin: {
+          farmName: form.farmName,
+          location: form.farmLocation,
+          country: 'España' // Por defecto
+        },
+        allergens: form.allergens,
+        storageConditions: {
+          temperature: form.temperature,
+          humidity: form.humidity
+        },
+        brand: form.farmName, // Usar el nombre de la finca como marca
+        certifications: form.certifications,
+        variety: form.variety
       };
 
-      // En una implementación real, aquí se haría la llamada a la API
-      // await api.createProduct(productData);
+      console.log('🚀 Creando producto con datos:', productData);
+
+      // Importar y usar la función de creación de productos
+      const { createProduct, getWalletService } = await import('@/utils/api');
       
-      await new Promise(resolve => setTimeout(resolve, 2000)); // Simular delay
+      // Inicializar wallet si no existe
+      const walletService = await getWalletService();
       
-      toast.success(`¡Producto "${form.name}" creado exitosamente!`);
-      toast.success(`Lote: ${batchNumber}`);
+      // Generar wallet si no hay uno activo
+      if (!walletService.hasActiveWallet()) {
+        console.log('🔑 Generando nuevo wallet para el usuario...');
+        const wallet = walletService.generateRandomWallet();
+        console.log('✅ Wallet generado:', wallet.address);
+        toast.success(`Wallet generado: ${wallet.address.substring(0, 10)}...`);
+        
+        // Guardar dirección del wallet en el usuario si no tiene una
+        if (user && !user.address) {
+          user.address = wallet.address;
+          // Actualizar localStorage
+          localStorage.setItem('authUser', JSON.stringify(user));
+        }
+      }
       
-      // Redirigir al dashboard del productor
-      router.push('/producer');
+      // Obtener dirección del wallet o usuario
+      const walletAddress = walletService.getCurrentAddress() || user?.address || '';
       
-    } catch (error) {
-      console.error('Error creating product:', error);
-      toast.error('Error al crear el producto. Inténtalo de nuevo.');
+      console.log('📍 Dirección para firmar:', walletAddress);
+      
+      // Generar firma para la creación del producto
+      const signature = await walletService.signCreateToken(
+        productId,
+        walletAddress,
+        form.name,
+        form.quantity
+      );
+
+      console.log('✍️ Firma generada para crear producto:', signature);
+      console.log('🔗 Creando producto directamente en FoodTraceabilityContract...');
+
+      // Agregar la firma a los datos del producto para demostrar que fue firmado
+      const signedProductData = {
+        ...productData,
+        signature: signature,
+        walletAddress: walletAddress
+      };
+
+      // Crear producto en el blockchain usando el contrato principal
+      const response = await createProduct(signedProductData);
+      
+      if (response.success) {
+        toast.success(`¡Producto "${form.name}" creado exitosamente en blockchain!`);
+        toast.success(`Lote: ${batchNumber}`);
+        console.log('✅ Producto creado en blockchain:', response.data);
+        
+        // Redirigir al dashboard del productor
+        router.push('/producer');
+      } else {
+        throw new Error(response.message || 'Error al crear el producto');
+      }
+      
+    } catch (error: any) {
+      console.error('❌ Error creating product:', error);
+      toast.error(`Error al crear el producto: ${error.message || 'Inténtalo de nuevo'}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -406,7 +477,7 @@ export default function CreateProduct() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="label">
-                      <ThermometerIcon className="w-4 h-4 inline mr-2" />
+                      <FireIcon className="w-4 h-4 inline mr-2" />
                       Temperatura Recomendada (°C)
                     </label>
                     <input

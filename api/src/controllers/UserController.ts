@@ -3,7 +3,7 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
-import { fabricService } from '../services/FabricService.js';
+import { fabricGatewayService } from '../services/FabricGatewayService.js';
 import { body, validationResult } from 'express-validator';
 
 export class UserController {
@@ -47,7 +47,7 @@ export class UserController {
                 licenseNumber
             };
 
-            const result = await fabricService.registerUser(userData);
+            const result = await fabricGatewayService.registerUser(userData);
 
             res.status(201).json({
                 success: true,
@@ -84,7 +84,7 @@ export class UserController {
                 return;
             }
 
-            const user = await fabricService.getUser(userAddress);
+            const user = await fabricGatewayService.getUser(userAddress);
 
             res.json({
                 success: true,
@@ -104,7 +104,7 @@ export class UserController {
         try {
             const { address } = req.params;
 
-            const user = await fabricService.getUser(address);
+            const user = await fabricGatewayService.getUser(address);
 
             res.json({
                 success: true,
@@ -168,7 +168,7 @@ export class UserController {
                 categorySettingsData: categorySettings ? JSON.stringify(categorySettings) : undefined
             };
 
-            const result = await fabricService.setNotificationSettings(settingsData);
+            const result = await fabricGatewayService.setNotificationSettings(settingsData);
 
             res.json({
                 success: true,
@@ -210,7 +210,7 @@ export class UserController {
             }
 
             // Obtener usuario completo que incluye configuración de notificaciones
-            const user = await fabricService.getUser(userAddress);
+            const user = await fabricGatewayService.getUser(userAddress);
 
             res.json({
                 success: true,
@@ -313,7 +313,7 @@ export class UserController {
             } = req.body;
 
             // Obtener datos actuales del usuario
-            const currentUser = await fabricService.getUser(userAddress);
+            const currentUser = await fabricGatewayService.getUser(userAddress);
 
             // Preparar datos actualizados
             const updatedUserData = {
@@ -327,7 +327,7 @@ export class UserController {
             };
 
             // Re-registrar usuario con datos actualizados
-            const result = await fabricService.registerUser(updatedUserData);
+            const result = await fabricGatewayService.registerUser(updatedUserData);
 
             res.json({
                 success: true,

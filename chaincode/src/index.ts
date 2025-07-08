@@ -4,12 +4,18 @@
  */
 
 import { type Contract } from 'fabric-contract-api';
-import { FoodTraceabilityContract, UserContract } from './contracts';
+import { SimpleContract } from './contracts/SimpleContract';
+import { TokenizarContract } from './contracts/TokenizarContract';
+import { FoodTraceabilityContract } from './contracts/FoodTraceabilityContract';
 
-// Export estándar para CCAAS según fabric-samples
-export const contracts: typeof Contract[] = [FoodTraceabilityContract, UserContract];
+// Export múltiples contratos para transferencias
+export const contracts: typeof Contract[] = [
+    SimpleContract,
+    TokenizarContract,
+    FoodTraceabilityContract
+];
 
-// También exportamos las interfaces para TypeScript
-export { FoodTraceabilityContract, UserContract } from './contracts';
-export * from './models';
-export * from './utils';
+// Export de contratos
+export { SimpleContract } from './contracts/SimpleContract';
+export { TokenizarContract } from './contracts/TokenizarContract';
+export { FoodTraceabilityContract } from './contracts/FoodTraceabilityContract';

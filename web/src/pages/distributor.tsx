@@ -117,7 +117,7 @@ export default function DistributorDashboard() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuth();
   const [stats, setStats] = useState<DistributorStats>(mockStats);
-  const [products, setProducts] = useState<Product[]>(mockProducts);
+  const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentUser, setCurrentUser] = useState<any>(null);

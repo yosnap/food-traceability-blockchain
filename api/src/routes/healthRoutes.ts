@@ -3,7 +3,7 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { fabricService } from '../services/FabricService.js';
+import { fabricGatewayService } from '../services/FabricGatewayService.js';
 
 const router = Router();
 
@@ -20,8 +20,8 @@ router.get('/', async (req: Request, res: Response) => {
         let fabricError = null;
         
         try {
-            if (fabricService.isConnected()) {
-                await fabricService.ping();
+            if (fabricGatewayService.isConnected()) {
+                await fabricGatewayService.ping();
                 fabricStatus = 'connected';
             }
         } catch (error: any) {
@@ -89,8 +89,8 @@ router.get('/detailed', async (req: Request, res: Response) => {
 
         // Test de conexión con Fabric
         try {
-            if (fabricService.isConnected()) {
-                const pingResult = await fabricService.ping();
+            if (fabricGatewayService.isConnected()) {
+                const pingResult = await fabricGatewayService.ping();
                 services.fabric = {
                     status: 'connected',
                     details: `Chaincode response: ${pingResult}`
@@ -165,7 +165,7 @@ router.get('/detailed', async (req: Request, res: Response) => {
 router.get('/ready', async (req: Request, res: Response) => {
     try {
         // Verificar que todos los servicios críticos estén listos
-        const isReady = fabricService.isConnected();
+        const isReady = fabricGatewayService.isConnected();
         
         if (isReady) {
             res.status(200).json({

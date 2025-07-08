@@ -1,12 +1,13 @@
 // Types for Food Traceability Frontend
 
 export enum UserRole {
-  PRODUCER = 'PRODUCER',
-  PROCESSOR = 'PROCESSOR',
-  DISTRIBUTOR = 'DISTRIBUTOR',
-  RETAILER = 'RETAILER',
-  CONSUMER = 'CONSUMER',
-  ADMIN = 'ADMIN'
+  PRODUCER = 'producer',
+  FACTORY = 'factory',
+  PROCESSOR = 'processor',
+  DISTRIBUTOR = 'distributor',
+  RETAILER = 'retailer',
+  CONSUMER = 'consumer',
+  ADMIN = 'admin'
 }
 
 export enum FoodCategory {
@@ -107,7 +108,7 @@ export interface FoodAsset {
 }
 
 export interface User {
-  address: string;
+  address: string;           // Ethereum address
   name: string;
   role: UserRole;
   email?: string;
@@ -120,6 +121,36 @@ export interface User {
   notificationSettings?: NotificationSettings;
   createdAt: string;
   updatedAt: string;
+  // X.509 Certificate information (siguiendo repositorio de referencia)
+  fabricUserId?: string;     // ID del usuario en Fabric (ej: User1@org1.example.com)
+  mspId?: string;           // MSP ID (ej: Org1MSP)
+  certificateId?: string;   // ID único del certificado
+  organizationName?: string; // Nombre de la organización (ej: org1)
+}
+
+// Interfaces para autenticación con ethers.js (siguiendo repositorio de referencia)
+export interface EthersWallet {
+  address: string;
+  privateKey: string;
+  publicKey: string;
+}
+
+export interface SignatureRequest {
+  message: string;
+  address: string;
+  signature?: string;
+}
+
+// Interface para respuesta de login con X.509
+export interface X509LoginResponse {
+  token: string;
+  user: User;
+  certificateInfo: {
+    fabricUserId: string;
+    mspId: string;
+    certificateId: string;
+    organizationName: string;
+  };
 }
 
 export interface NotificationSettings {
@@ -317,4 +348,35 @@ export interface Product {
     certification?: string;
     harvestDate?: string;
   };
+}
+
+// MetaMask Types
+declare global {
+  interface Window {
+    ethereum?: {
+      isMetaMask?: boolean;
+      request: (args: { method: string; params?: any[] }) => Promise<any>;
+      on?: (eventName: string, handler: (...args: any[]) => void) => void;
+      removeListener?: (eventName: string, handler: (...args: any[]) => void) => void;
+    };
+  }
+}
+
+export interface MetaMaskProvider {
+  request: (args: { method: string; params?: any[] }) => Promise<any>;
+  on: (eventName: string, handler: (...args: any[]) => void) => void;
+  removeListener: (eventName: string, handler: (...args: any[]) => void) => void;
+}
+
+export interface WalletConnection {
+  address: string;
+  isConnected: boolean;
+  provider: 'metamask' | 'predefined';
+  chainId?: string;
+}
+
+export interface MetaMaskError {
+  code: number;
+  message: string;
+  data?: any;
 }

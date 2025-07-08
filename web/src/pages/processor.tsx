@@ -138,7 +138,7 @@ export default function ProcessorDashboard() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuth();
   const [stats, setStats] = useState<ProcessorStats>(mockStats);
-  const [products, setProducts] = useState<Product[]>(mockProducts);
+  const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentUser, setCurrentUser] = useState<any>(null);
