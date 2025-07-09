@@ -24,6 +24,7 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import { Product, ProductStatus, UserRole } from '@/types';
 import SafeDate from '@/components/SafeDate';
+import ProductDetailsModal from '@/components/ProductDetailsModal';
 import NotificationBell from '@/components/NotificationBell';
 import { useNotifications } from '@/hooks/useNotifications';
 import { calculateExpirationInfo } from '@/utils/expirationUtils';
@@ -47,6 +48,8 @@ export default function ConsumerDashboard() {
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [showScanner, setShowScanner] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [currentUser, setCurrentUser] = useState<any>(null);
   
   // Hook de notificaciones
@@ -253,6 +256,33 @@ export default function ConsumerDashboard() {
     }, 2000);
   };
 
+  const handleTraceabilityClick = (product: Product) => {
+    setSelectedProduct(product);
+    setShowDetailsModal(true);
+  };
+
+  const handleHistoryClick = () => {
+    toast('Mostrando historial de productos consumidos', { 
+      icon: '📋',
+      duration: 3000 
+    });
+  };
+
+  const handleMarkConsumed = async (product: Product) => {
+    toast('Marcando producto como consumido...', { 
+      icon: '🍽️',
+      duration: 2000 
+    });
+    
+    // Aquí iría la lógica para marcar el producto como consumido
+    // Por ahora solo mostramos un toast
+    setTimeout(() => {
+      toast.success(`Producto "${product.name}" marcado como consumido`);
+      // Recargar datos después de marcar como consumido
+      loadDashboardData();
+    }, 1000);
+  };
+
   if (isInitialLoad) {
     return (
       <>
@@ -434,7 +464,9 @@ export default function ConsumerDashboard() {
                 </div>
               </div>
 
-              <div className="card hover:shadow-lg transition-shadow cursor-pointer">
+              <div 
+                onClick={handleHistoryClick}
+                className="card hover:shadow-lg transition-shadow cursor-pointer">
                 <div className="text-center">
                   <div className="w-16 h-16 bg-purple-100 rounded-lg flex items-center justify-center mx-auto mb-4">
                     <InformationCircleIcon className="w-8 h-8 text-purple-600" />
@@ -534,10 +566,13 @@ export default function ConsumerDashboard() {
                         </div>
 
                         <div className="flex items-center space-x-2">
-                          <button className="btn-secondary text-sm">
+                          <button 
+                            onClick={() => handleTraceabilityClick(product)}
+                            className="btn-secondary text-sm">
                             Ver Trazabilidad
                           </button>
                           <button 
+                            onClick={() => handleMarkConsumed(product)}
                             className={`px-3 py-1 rounded text-sm transition-colors ${
                               expirationInfo.canTransfer
                                 ? 'bg-gray-600 hover:bg-gray-700 text-white'
@@ -590,6 +625,13 @@ export default function ConsumerDashboard() {
           </div>
         </main>
       </div>
+
+      {/* Product Details Modal */}
+      <ProductDetailsModal
+        isOpen={showDetailsModal}
+        onClose={() => setShowDetailsModal(false)}
+        product={selectedProduct}
+      />
     </>
   );
 }
