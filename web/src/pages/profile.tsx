@@ -22,7 +22,8 @@ import {
   XCircleIcon,
   ShieldCheckIcon,
   IdentificationIcon,
-  DocumentTextIcon
+  DocumentTextIcon,
+  ClockIcon
 } from '@heroicons/react/24/outline';
 import { useAuth } from '@/hooks/useAuth';
 import { walletService } from '@/services/walletService';

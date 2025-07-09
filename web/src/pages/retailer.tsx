@@ -24,10 +24,49 @@ import { useAuth } from '@/hooks/useAuth';
 import { Product, ProductStatus, UserRole } from '@/types';
 import SafeDate from '@/components/SafeDate';
 import TransferModal from '@/components/TransferModal';
+import ProductDetailsModal from '@/components/ProductDetailsModal';
 import NotificationBell from '@/components/NotificationBell';
 import { useNotifications } from '@/hooks/useNotifications';
 import { calculateExpirationInfo } from '@/utils/expirationUtils';
 import Breadcrumb from '@/components/Breadcrumb';
+
+// Función para calcular si un producto ha sido entregado (tiempo personalizable)
+function calculateDeliveryStatus(transferHistory: any[]): { status: 'pending' | 'in_transit' | 'delivered', timeInfo: string } {
+  if (!transferHistory || transferHistory.length === 0) {
+    return { status: 'pending', timeInfo: 'Sin transferencias' };
+  }
+  
+  const lastTransfer = transferHistory[transferHistory.length - 1];
+  const transferTime = new Date(lastTransfer.timestamp);
+  const now = new Date();
+  const hoursSinceTransfer = (now.getTime() - transferTime.getTime()) / (1000 * 60 * 60);
+  
+  // Usar tiempo de entrega personalizado o 0 horas por defecto (inmediata)
+  const deliveryTimeHours = lastTransfer.deliveryTimeHours !== undefined ? lastTransfer.deliveryTimeHours : 0;
+  
+  // Si el tiempo de entrega es 0 (inmediata), marcar como entregado inmediatamente
+  if (deliveryTimeHours === 0) {
+    return { 
+      status: 'delivered', 
+      timeInfo: `Entregado inmediatamente` 
+    };
+  }
+  
+  if (hoursSinceTransfer < deliveryTimeHours) {
+    const remainingHours = deliveryTimeHours - hoursSinceTransfer;
+    const remainingMinutes = Math.floor((remainingHours % 1) * 60);
+    const hours = Math.floor(remainingHours);
+    return { 
+      status: 'in_transit', 
+      timeInfo: `${hours}h ${remainingMinutes}m para entrega` 
+    };
+  } else {
+    return { 
+      status: 'delivered', 
+      timeInfo: `Entregado hace ${Math.floor(hoursSinceTransfer - deliveryTimeHours)}h` 
+    };
+  }
+}
 
 interface RetailerStats {
   totalInventory: number;
@@ -48,6 +87,7 @@ export default function RetailerDashboard() {
   const [searchTerm, setSearchTerm] = useState('');
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [showTransferModal, setShowTransferModal] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   
   // Hook de notificaciones
@@ -60,6 +100,7 @@ export default function RetailerDashboard() {
 
   useEffect(() => {
     let timeoutId: NodeJS.Timeout | null = null;
+    let intervalId: NodeJS.Timeout | null = null;
     let mounted = true;
     
     // Simplified auth check
@@ -106,10 +147,20 @@ export default function RetailerDashboard() {
       }
     }, 100);
     
+    // Auto-refresh every minute to update delivery statuses
+    intervalId = setInterval(() => {
+      if (mounted) {
+        loadDashboardData();
+      }
+    }, 60000); // 60 seconds
+    
     return () => {
       mounted = false;
       if (timeoutId) {
         clearTimeout(timeoutId);
+      }
+      if (intervalId) {
+        clearInterval(intervalId);
       }
     };
   }, []);
@@ -120,40 +171,51 @@ export default function RetailerDashboard() {
       console.log('🔄 Cargando datos del dashboard de minorista...');
       
       // Importar funciones de API para cargar productos reales
-      const { getMyProducts } = await import('@/utils/api');
+      const { getMyProducts, getMyTransfers } = await import('@/utils/api');
       
       // Cargar productos del usuario autenticado
       const productsResponse = await getMyProducts();
+      
+      // Cargar transferencias del usuario autenticado (ventas realizadas)
+      const transfersResponse = await getMyTransfers();
       
       if (productsResponse.success && productsResponse.data) {
         console.log('✅ Productos cargados:', productsResponse.data);
         
         // Convertir FoodAsset[] a Product[] para compatibilidad con la UI
-        const convertedProducts = productsResponse.data.map((foodAsset: any) => ({
-          id: foodAsset.id,
-          name: foodAsset.name,
-          batchNumber: foodAsset.batchNumber || foodAsset.attributes?.batchNumber,
-          productionDate: foodAsset.productionDate || foodAsset.attributes?.productionDate,
-          expirationDate: foodAsset.expirationDate || foodAsset.attributes?.expirationDate,
-          status: foodAsset.status || ProductStatus.ACTIVE,
-          currentLocation: foodAsset.origin?.farmName || foodAsset.attributes?.origin?.farmName || 'Supermercado Central',
-          temperature: foodAsset.storageConditions?.temperature || foodAsset.attributes?.storageConditions?.temperature || 6,
-          humidity: foodAsset.storageConditions?.humidity || foodAsset.attributes?.storageConditions?.humidity || 70,
-          producer: {
-            id: 'current-retailer',
-            name: foodAsset.origin?.farmName || foodAsset.attributes?.origin?.farmName || 'SuperMarket Plus',
-            location: foodAsset.origin?.location || foodAsset.attributes?.origin?.location || 'Plaza Central, Cartago'
-          },
-          metadata: {
-            variety: foodAsset.variety || foodAsset.attributes?.variety || 'Para venta',
-            weight: foodAsset.weight ? `${foodAsset.weight}kg` : (foodAsset.attributes?.weight ? `${foodAsset.attributes.weight}kg` : 'Sin especificar'),
-            certification: foodAsset.certifications?.join(', ') || foodAsset.attributes?.certifications?.join(', ') || 'CODEX',
-            harvestDate: foodAsset.productionDate || foodAsset.attributes?.productionDate,
-            description: foodAsset.description || foodAsset.attributes?.description || 'Producto para venta al consumidor',
-            brand: foodAsset.brand || foodAsset.attributes?.brand || 'SuperMarket Plus',
-            category: foodAsset.category || foodAsset.attributes?.category || 'RETAIL'
-          }
-        }));
+        const convertedProducts = productsResponse.data.map((foodAsset: any) => {
+          const deliveryStatus = calculateDeliveryStatus(foodAsset.transferHistory);
+          
+          return {
+            id: foodAsset.id,
+            name: foodAsset.name,
+            batchNumber: foodAsset.batchNumber || foodAsset.attributes?.batchNumber,
+            productionDate: foodAsset.productionDate || foodAsset.attributes?.productionDate,
+            expirationDate: foodAsset.expirationDate || foodAsset.attributes?.expirationDate,
+            status: deliveryStatus.status === 'delivered' ? ProductStatus.ACTIVE : 
+                   deliveryStatus.status === 'in_transit' ? ProductStatus.IN_TRANSIT : 
+                   ProductStatus.ACTIVE,
+            currentLocation: foodAsset.origin?.farmName || foodAsset.attributes?.origin?.farmName || 'Supermercado Central',
+            temperature: foodAsset.storageConditions?.temperature || foodAsset.attributes?.storageConditions?.temperature || 6,
+            humidity: foodAsset.storageConditions?.humidity || foodAsset.attributes?.storageConditions?.humidity || 70,
+            quantity: foodAsset.amount || 1, // Mapear el campo amount del blockchain como quantity
+            producer: {
+              id: 'current-retailer',
+              name: foodAsset.origin?.farmName || foodAsset.attributes?.origin?.farmName || 'SuperMarket Plus',
+              location: foodAsset.origin?.location || foodAsset.attributes?.origin?.location || 'Plaza Central, Cartago'
+            },
+            metadata: {
+              variety: foodAsset.variety || foodAsset.attributes?.variety || 'Para venta',
+              weight: foodAsset.weight ? `${foodAsset.weight}kg` : (foodAsset.attributes?.weight ? `${foodAsset.attributes.weight}kg` : 'Sin especificar'),
+              certification: foodAsset.certifications?.join(', ') || foodAsset.attributes?.certifications?.join(', ') || 'CODEX',
+              harvestDate: foodAsset.productionDate || foodAsset.attributes?.productionDate,
+              description: foodAsset.description || foodAsset.attributes?.description || 'Producto para venta al consumidor',
+              brand: foodAsset.brand || foodAsset.attributes?.brand || 'SuperMarket Plus',
+              category: foodAsset.category || foodAsset.attributes?.category || 'RETAIL',
+              deliveryInfo: deliveryStatus.timeInfo // Información de entrega
+            }
+          };
+        });
         
         // Ensure unique products by ID to avoid duplicate keys
         const uniqueProducts = convertedProducts.filter((product, index, array) => 
@@ -161,10 +223,25 @@ export default function RetailerDashboard() {
         );
         setProducts(uniqueProducts);
         
+        // Calcular transferencias realizadas hoy (ventas)
+        let soldToday = 0;
+        if (transfersResponse.success && transfersResponse.data) {
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const tomorrow = new Date(today);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          
+          soldToday = transfersResponse.data.filter((transfer: any) => {
+            const transferDate = new Date(transfer.timestamp);
+            return transferDate >= today && transferDate < tomorrow;
+          }).length;
+          
+          console.log(`📊 Ventas del día: ${soldToday} de ${transfersResponse.data.length} transferencias totales`);
+        }
+        
         // Calcular estadísticas básicas
         const totalInventory = uniqueProducts.length;
         const activeProducts = uniqueProducts.filter(p => p.status === ProductStatus.ACTIVE).length;
-        const soldToday = uniqueProducts.filter(p => p.status === ProductStatus.CONSUMED).length;
         const lowStock = uniqueProducts.filter(p => {
           const expirationInfo = calculateExpirationInfo(p);
           return expirationInfo.urgencyLevel === 'warning' || expirationInfo.urgencyLevel === 'critical';
@@ -181,7 +258,33 @@ export default function RetailerDashboard() {
       } else {
         console.log('ℹ️ No se encontraron productos en inventario');
         setProducts([]);
-        toast.info('No hay productos en inventario registrados.', { id: 'dashboard-empty' });
+        
+        // Calcular ventas incluso si no hay productos actuales
+        let soldToday = 0;
+        if (transfersResponse.success && transfersResponse.data) {
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const tomorrow = new Date(today);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          
+          soldToday = transfersResponse.data.filter((transfer: any) => {
+            const transferDate = new Date(transfer.timestamp);
+            return transferDate >= today && transferDate < tomorrow;
+          }).length;
+        }
+        
+        setStats({
+          totalInventory: 0,
+          activeProducts: 0,
+          soldToday,
+          lowStock: 0
+        });
+        
+        toast(`No hay productos en inventario. Ventas hoy: ${soldToday}`, { 
+          icon: '📦',
+          duration: 4000,
+          id: 'dashboard-empty' 
+        });
       }
       
     } catch (error: any) {
@@ -240,6 +343,11 @@ export default function RetailerDashboard() {
   const handleTransferClick = (product: Product) => {
     setSelectedProduct(product);
     setShowTransferModal(true);
+  };
+
+  const handleDetailsClick = (product: Product) => {
+    setSelectedProduct(product);
+    setShowDetailsModal(true);
   };
 
   const handleTransferComplete = async (product: Product, toRole: UserRole, recipient: any) => {
@@ -409,7 +517,9 @@ export default function RetailerDashboard() {
 
             {/* Actions Section */}
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
-              <div className="card hover:shadow-lg transition-shadow cursor-pointer">
+              <div 
+                onClick={() => toast('Función de venta en desarrollo - usar botón "Vender" en cada producto', { icon: '🛒' })}
+                className="card hover:shadow-lg transition-shadow cursor-pointer">
                 <div className="text-center">
                   <div className="w-16 h-16 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-4">
                     <ShoppingCartIcon className="w-8 h-8 text-green-600" />
@@ -419,13 +529,25 @@ export default function RetailerDashboard() {
                 </div>
               </div>
 
-              <div className="card hover:shadow-lg transition-shadow cursor-pointer">
+              <div 
+                onClick={() => {
+                  const inTransitProducts = products.filter(p => p.status === ProductStatus.IN_TRANSIT);
+                  if (inTransitProducts.length > 0) {
+                    toast.success(`Tienes ${inTransitProducts.length} productos en tránsito que se recibirán automáticamente`);
+                  } else {
+                    toast('No hay productos pendientes de recibir. Los productos se reciben automáticamente cuando los distribuidores los envían.', { 
+                      icon: '📦',
+                      duration: 4000 
+                    });
+                  }
+                }}
+                className="card hover:shadow-lg transition-shadow cursor-pointer">
                 <div className="text-center">
                   <div className="w-16 h-16 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-4">
                     <PlusIcon className="w-8 h-8 text-blue-600" />
                   </div>
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">Recibir Inventario</h3>
-                  <p className="text-gray-600 text-sm">Registrar nuevos productos recibidos</p>
+                  <p className="text-gray-600 text-sm">Ver productos en tránsito y recibidos</p>
                 </div>
               </div>
 
@@ -491,7 +613,13 @@ export default function RetailerDashboard() {
                             <h4 className="text-lg font-medium text-gray-900">{product.name}</h4>
                             <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(product.status)}`}>
                               {getStatusIcon(product.status)}
-                              <span className="ml-1">{product.status}</span>
+                              <span className="ml-1">
+                                {product.status === ProductStatus.ACTIVE && 'Disponible'}
+                                {product.status === ProductStatus.IN_TRANSIT && 'En Tránsito'}
+                                {product.status === ProductStatus.CONSUMED && 'Vendido'}
+                                {product.status === ProductStatus.EXPIRED && 'Vencido'}
+                                {product.status === ProductStatus.RECALLED && 'Retirado'}
+                              </span>
                             </span>
                             
                             {expirationInfo.urgencyLevel !== 'normal' && (
@@ -521,15 +649,19 @@ export default function RetailerDashboard() {
                           </div>
 
                           <div className="mt-2 text-sm text-gray-500">
-                            <span className="mr-4">Stock: {product.metadata.weight}</span>
+                            <span className="mr-4">Cantidad: {product.quantity} unidades</span>
+                            <span className="mr-4">Peso: {product.metadata.weight}</span>
                             <span className="mr-4">Temp: {product.temperature}°C</span>
                             <span className="mr-4">Humedad: {product.humidity}%</span>
-                            <span>Certificación: {product.metadata.certification}</span>
+                            <span className="mr-4">Certificación: {product.metadata.certification}</span>
+                            <span className="font-medium text-blue-600">{product.metadata.deliveryInfo}</span>
                           </div>
                         </div>
 
                         <div className="flex items-center space-x-2">
-                          <button className="btn-secondary text-sm">
+                          <button 
+                            onClick={() => handleDetailsClick(product)}
+                            className="btn-secondary text-sm">
                             Ver Historial
                           </button>
                           <button 
@@ -558,7 +690,12 @@ export default function RetailerDashboard() {
                   <p className="text-gray-600 mb-4">
                     {searchTerm ? 'No se encontraron productos con ese término' : 'Tu inventario está vacío'}
                   </p>
-                  <button className="btn-primary">
+                  <button 
+                    onClick={() => toast('Los productos aparecerán automáticamente cuando los distribuidores los envíen', { 
+                      icon: '📦',
+                      duration: 3000 
+                    })}
+                    className="btn-primary">
                     Recibir Inventario
                   </button>
                 </div>
@@ -575,6 +712,13 @@ export default function RetailerDashboard() {
         product={selectedProduct}
         fromRole={UserRole.RETAILER}
         onTransferComplete={handleTransferComplete}
+      />
+
+      {/* Product Details Modal */}
+      <ProductDetailsModal
+        isOpen={showDetailsModal}
+        onClose={() => setShowDetailsModal(false)}
+        product={selectedProduct}
       />
     </>
   );
