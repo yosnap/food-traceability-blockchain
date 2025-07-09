@@ -172,6 +172,80 @@ export class SimpleContract extends Contract {
     }
 
     /**
+     * Migrar producto existente a nueva dirección de propietario
+     */
+    @Transaction()
+    public async migrateProductOwner(
+        ctx: Context,
+        tokenId: string,
+        oldOwnerAddress: string,
+        newOwnerAddress: string
+    ): Promise<string> {
+        console.log(`🔄 Migrando producto: ${tokenId} de ${oldOwnerAddress} a ${newOwnerAddress}`);
+
+        // Validar parámetros
+        if (!tokenId || !oldOwnerAddress || !newOwnerAddress) {
+            throw new Error('Parámetros de migración inválidos');
+        }
+
+        // Obtener producto con dirección antigua
+        const oldKey = `product:${tokenId}:${oldOwnerAddress}`;
+        const productBytes = await ctx.stub.getState(oldKey);
+        
+        if (!productBytes || productBytes.length === 0) {
+            throw new Error(`Producto ${tokenId} no encontrado para ${oldOwnerAddress}`);
+        }
+
+        const product = JSON.parse(productBytes.toString());
+
+        // Crear nueva clave con dirección nueva
+        const newKey = `product:${tokenId}:${newOwnerAddress}`;
+        
+        // Verificar que no exista ya con la nueva dirección
+        const existingBytes = await ctx.stub.getState(newKey);
+        if (existingBytes && existingBytes.length > 0) {
+            throw new Error(`Producto ${tokenId} ya existe para ${newOwnerAddress}`);
+        }
+
+        // Actualizar propietario y timestamp
+        const timestamp = ctx.stub.getTxTimestamp();
+        const updatedAt = new Date(Number(timestamp.seconds) * 1000 + Math.floor(Number(timestamp.nanos) / 1000000)).toISOString();
+        
+        product.owner = newOwnerAddress;
+        product.updatedAt = updatedAt;
+        
+        // Agregar nota de migración si no existe transferHistory
+        if (!product.transferHistory) {
+            product.transferHistory = [];
+        }
+        product.transferHistory.push({
+            from: oldOwnerAddress,
+            to: newOwnerAddress,
+            amount: product.amount,
+            transferType: 'MIGRATION',
+            timestamp: updatedAt,
+            notes: 'Migración de dirección de propietario'
+        });
+
+        // Guardar con nueva clave
+        await ctx.stub.putState(newKey, Buffer.from(JSON.stringify(product)));
+        
+        // Eliminar registro anterior
+        await ctx.stub.deleteState(oldKey);
+
+        // Emitir evento
+        ctx.stub.setEvent('ProductMigrated', Buffer.from(JSON.stringify({
+            tokenId,
+            oldOwner: oldOwnerAddress,
+            newOwner: newOwnerAddress,
+            timestamp: updatedAt
+        })));
+
+        console.log(`✅ Producto ${tokenId} migrado exitosamente a ${newOwnerAddress}`);
+        return `Producto ${tokenId} migrado a nueva dirección: ${newOwnerAddress}`;
+    }
+
+    /**
      * Transferir producto entre organizaciones
      */
     @Transaction()

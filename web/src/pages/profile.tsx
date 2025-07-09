@@ -357,7 +357,7 @@ export default function ProfilePage() {
                 <div>
                   <label className="text-sm font-medium text-gray-700">Fabric User ID</label>
                   <div className="flex items-center space-x-2">
-                    <p className="text-gray-900 font-mono text-sm">{userInfo.fabricUserId}</p>
+                    <p className="text-gray-900 font-mono text-xs">{userInfo.fabricUserId}</p>
                     <button
                       onClick={() => copyToClipboard(userInfo.fabricUserId || '', 'Fabric User ID')}
                       className="text-gray-400 hover:text-gray-600"

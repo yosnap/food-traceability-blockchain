@@ -123,8 +123,8 @@ export default function HomePage() {
                 <a href="#roles" className="text-gray-700 hover:text-primary-600 font-medium">
                   Usuarios
                 </a>
-                <a href="#demo" className="text-gray-700 hover:text-primary-600 font-medium">
-                  Demo
+                <a href="/auth" className="text-gray-700 hover:text-primary-600 font-medium">
+                  Acceder
                 </a>
               </nav>
             </div>
@@ -150,7 +150,7 @@ export default function HomePage() {
                   href="/auth"
                   className="btn-primary inline-flex items-center px-8 py-3 text-lg"
                 >
-                  Comenzar Demo
+                  Acceder a la red
                   <ArrowRightIcon className="ml-2 w-5 h-5" />
                 </Link>
                 
@@ -281,7 +281,7 @@ export default function HomePage() {
                 href="/auth"
                 className="bg-white text-primary-600 hover:bg-gray-50 font-medium py-3 px-8 rounded-md transition-colors duration-200 inline-flex items-center"
               >
-                Iniciar Demo
+                Acceder a la red
                 <ArrowRightIcon className="ml-2 w-5 h-5" />
               </Link>
               

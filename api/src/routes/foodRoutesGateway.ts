@@ -35,12 +35,25 @@ router.get('/ping', async (req: Request, res: Response) => {
 /**
  * Crear un nuevo producto (solo productores)
  */
-router.post('/products', devModeAuth, async (req: Request, res: Response) => {
+router.post('/products', async (req: Request, res: Response) => {
     try {
-        const user = req.user as SimpleUser;
+        const user = req.user;
+        if (!user) {
+            res.status(401).json({
+                success: false,
+                message: 'Usuario no autenticado',
+                timestamp: new Date().toISOString()
+            });
+            return;
+        }
+
+        const normalizedRole = user.role.toLowerCase();
+        const userId = normalizedRole === 'producer' || normalizedRole === 'admin' 
+            ? 'User1@org1.example.com' 
+            : 'User1@org2.example.com';
         
         // Verificar que el usuario sea productor
-        if (user.role !== 'producer' && user.role !== 'admin') {
+        if (normalizedRole !== 'producer' && normalizedRole !== 'admin') {
             res.status(403).json({
                 success: false,
                 message: 'Solo los productores pueden crear productos',
@@ -103,11 +116,11 @@ router.post('/products', devModeAuth, async (req: Request, res: Response) => {
 
         const defaultAllergens = allergens || JSON.stringify([]);
 
-        console.log(`🔧 Creando producto como ${user.userId} (${user.role})`);
+        console.log(`🔧 Creando producto como ${userId} (${normalizedRole})`);
 
         // Usar el nuevo servicio Gateway con firma por usuario
         const result = await fabricGatewayService.createFoodAsset(
-            user.userId, // Identidad que firma
+            userId, // Identidad que firma
             {
                 id: productId,
                 batchNumber: batch,
@@ -123,7 +136,8 @@ router.post('/products', devModeAuth, async (req: Request, res: Response) => {
                 weight: weight ? parseFloat(weight) : undefined,
                 volume: volume ? parseFloat(volume) : undefined,
                 brand: brand || undefined
-            }
+            },
+            user.address // Usar la dirección real del usuario autenticado
         );
 
         res.status(201).json({
@@ -151,7 +165,7 @@ router.post('/products', devModeAuth, async (req: Request, res: Response) => {
 /**
  * Obtener un producto por ID
  */
-router.get('/products/:id', devModeAuth, async (req: Request, res: Response) => {
+router.get('/products/:id', async (req: Request, res: Response) => {
     try {
         const { id } = req.params;
         
@@ -196,9 +210,18 @@ router.get('/products/:id', devModeAuth, async (req: Request, res: Response) => 
 /**
  * Transferir un producto a otro usuario
  */
-router.post('/products/:id/transfer', devModeAuth, async (req: Request, res: Response) => {
+router.post('/products/:id/transfer', async (req: Request, res: Response) => {
     try {
-        const user = req.user as SimpleUser;
+        const user = req.user;
+        if (!user) {
+            res.status(401).json({
+                success: false,
+                message: 'Usuario no autenticado',
+                timestamp: new Date().toISOString()
+            });
+            return;
+        }
+
         const { id } = req.params;
         const { newOwner, transferType, locationData, quantity, price, conditions, notes } = req.body;
 
@@ -216,11 +239,17 @@ router.post('/products/:id/transfer', devModeAuth, async (req: Request, res: Res
             country: 'Colombia'
         });
 
-        console.log(`🔧 Transfiriendo producto ${id} como ${user.userId} (${user.role})`);
+        // Mapear el rol del authMiddleware al formato interno para Fabric
+        const normalizedRole = user.role.toLowerCase();
+        const userId = normalizedRole === 'producer' || normalizedRole === 'admin' 
+            ? 'User1@org1.example.com' 
+            : 'User1@org2.example.com';
+
+        console.log(`🔧 Transfiriendo producto ${id} como ${userId} (${user.role})`);
 
         const result = await fabricGatewayService.transferFoodAsset(
-            user.userId, // Quien firma la transferencia
-            user.role,
+            userId, // Quien firma la transferencia
+            normalizedRole,
             {
                 assetId: id,
                 newOwner,
@@ -230,7 +259,8 @@ router.post('/products/:id/transfer', devModeAuth, async (req: Request, res: Res
                 price: price ? parseFloat(price) : undefined,
                 conditions: conditions || 'Buenas condiciones',
                 notes: notes || `Transferencia firmada por ${user.name}`
-            }
+            },
+            user.address // Pasar la dirección real del usuario autenticado
         );
 
         res.json({
@@ -238,7 +268,7 @@ router.post('/products/:id/transfer', devModeAuth, async (req: Request, res: Res
             message: 'Producto transferido exitosamente',
             data: {
                 result,
-                signedBy: `${user.name} (${user.role})`
+                signedBy: `${user.name || 'Usuario'} (${user.role})`
             },
             timestamp: new Date().toISOString()
         });
@@ -257,7 +287,7 @@ router.post('/products/:id/transfer', devModeAuth, async (req: Request, res: Res
 /**
  * Obtener productos próximos a caducar
  */
-router.get('/expiring', devModeAuth, async (req: Request, res: Response) => {
+router.get('/expiring', async (req: Request, res: Response) => {
     try {
         const user = req.user as SimpleUser;
         const daysAhead = parseInt(req.query.daysAhead as string) || 7;
@@ -301,30 +331,73 @@ router.get('/expiring', devModeAuth, async (req: Request, res: Response) => {
 /**
  * Obtener mis productos (del usuario autenticado)
  */
-router.get('/products', devModeAuth, async (req: Request, res: Response) => {
+router.get('/products', async (req: Request, res: Response) => {
     try {
-        const user = req.user as SimpleUser;
-
-        console.log(`🔧 Obteniendo productos para usuario: ${user.userId} (${user.role})`);
-
-        try {
-            // Obtener TODOS los productos del sistema (enfoque Web3)
-            const result = await fabricGatewayService.getAllProducts();
-
-            const products = result; // getAllProducts ya devuelve un array parseado
-
-            res.json({
-                success: true,
-                message: 'Productos obtenidos exitosamente',
-                data: products,
-                owner: {
-                    userId: user.userId,
-                    name: user.name,
-                    role: user.role,
-                    address: user.address
-                },
+        const user = req.user;
+        if (!user) {
+            res.status(401).json({
+                success: false,
+                message: 'Usuario no autenticado',
                 timestamp: new Date().toISOString()
             });
+            return;
+        }
+
+        // Mapear el rol del authMiddleware al formato interno
+        const normalizedRole = user.role.toLowerCase();
+        
+        // Generar userId basado en el rol para Fabric
+        const userId = normalizedRole === 'producer' || normalizedRole === 'admin' 
+            ? 'User1@org1.example.com' 
+            : 'User1@org2.example.com';
+
+        console.log(`🔧 Obteniendo productos para usuario: ${user.address} (${normalizedRole})`);
+
+        try {
+            let products: any[] = [];
+            
+            // Admin puede ver TODOS los productos, otros roles solo SUS productos
+            if (normalizedRole === 'admin') {
+                console.log('🔧 Admin - Obteniendo TODOS los productos del sistema');
+                products = await fabricGatewayService.getAllProducts();
+                
+                res.json({
+                    success: true,
+                    message: 'Todos los productos del sistema obtenidos exitosamente',
+                    data: products,
+                    owner: {
+                        userId: userId,
+                        name: user.name || 'Administrador',
+                        role: normalizedRole,
+                        address: 'admin-global-view'
+                    },
+                    timestamp: new Date().toISOString()
+                });
+            } else {
+                console.log('🔧 Usuario normal - Obteniendo productos propios');
+                console.log(`🔧 DEBUG: Rol del usuario: "${normalizedRole}"`);
+                
+                // Usar la dirección del usuario autenticado como filtro
+                const userWalletAddress = user.address;
+                console.log(`🔧 DEBUG: Dirección del wallet: ${userWalletAddress}`);
+                
+                // Obtener solo los productos del usuario actual
+                products = await fabricGatewayService.getProductsByOwner(userWalletAddress);
+                console.log(`🔧 DEBUG: Productos obtenidos por propietario: ${products.length}`);
+
+                res.json({
+                    success: true,
+                    message: 'Productos del usuario obtenidos exitosamente',
+                    data: products,
+                    owner: {
+                        userId: userId,
+                        name: user.name || `Usuario ${normalizedRole}`,
+                        role: normalizedRole,
+                        address: userWalletAddress
+                    },
+                    timestamp: new Date().toISOString()
+                });
+            }
 
         } catch (chainError: any) {
             console.log('⚠️ Error obteniendo productos:', chainError.message);
@@ -335,9 +408,9 @@ router.get('/products', devModeAuth, async (req: Request, res: Response) => {
                 message: 'No hay productos aún o error al obtenerlos.',
                 data: [],
                 owner: {
-                    userId: user.userId,
-                    name: user.name,
-                    role: user.role,
+                    userId: userId,
+                    name: user.name || `Usuario ${normalizedRole}`,
+                    role: normalizedRole,
                     address: user.address
                 },
                 timestamp: new Date().toISOString()
@@ -358,16 +431,122 @@ router.get('/products', devModeAuth, async (req: Request, res: Response) => {
 });
 
 /**
+ * Migrar productos antiguos a direcciones reales (solo admin)
+ */
+router.post('/migrate-products', async (req: Request, res: Response) => {
+    try {
+        const user = req.user;
+        if (!user || user.role.toLowerCase() !== 'admin') {
+            res.status(403).json({
+                success: false,
+                message: 'Solo los administradores pueden migrar productos',
+                userRole: user?.role || 'no-auth'
+            });
+            return;
+        }
+
+        const { migrations } = req.body;
+        if (!migrations || !Array.isArray(migrations)) {
+            res.status(400).json({
+                success: false,
+                message: 'Formato inválido. Se requiere array de migraciones: [{ tokenId, oldOwner, newOwner }]'
+            });
+            return;
+        }
+
+        console.log(`🔄 Iniciando migración de ${migrations.length} productos...`);
+        
+        const results = [];
+        const normalizedRole = user.role.toLowerCase();
+        const userId = normalizedRole === 'admin' ? 'User1@org1.example.com' : 'User1@org2.example.com';
+
+        for (const migration of migrations) {
+            const { tokenId, oldOwner, newOwner } = migration;
+            
+            if (!tokenId || !oldOwner || !newOwner) {
+                results.push({
+                    tokenId: tokenId || 'unknown',
+                    status: 'error',
+                    message: 'Parámetros incompletos: tokenId, oldOwner, newOwner requeridos'
+                });
+                continue;
+            }
+
+            try {
+                const result = await fabricGatewayService.migrateProductOwner(
+                    userId,
+                    tokenId,
+                    oldOwner,
+                    newOwner
+                );
+                
+                results.push({
+                    tokenId,
+                    status: 'success',
+                    message: result,
+                    migration: { oldOwner, newOwner }
+                });
+                
+                console.log(`✅ Migrado: ${tokenId} de ${oldOwner} a ${newOwner}`);
+                
+            } catch (error: any) {
+                results.push({
+                    tokenId,
+                    status: 'error',
+                    message: error.message,
+                    migration: { oldOwner, newOwner }
+                });
+                
+                console.error(`❌ Error migrando ${tokenId}:`, error.message);
+            }
+        }
+
+        const successful = results.filter(r => r.status === 'success').length;
+        const failed = results.filter(r => r.status === 'error').length;
+
+        res.json({
+            success: true,
+            message: `Migración completada: ${successful} exitosos, ${failed} fallidos`,
+            data: {
+                totalProcessed: migrations.length,
+                successful,
+                failed,
+                results
+            },
+            timestamp: new Date().toISOString()
+        });
+
+    } catch (error: any) {
+        console.error('❌ Error en migración masiva:', error.message);
+        res.status(500).json({
+            success: false,
+            message: 'Error en migración masiva',
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
+/**
  * Consumir un producto (marcar como consumido)
  */
-router.post('/products/:id/consume', devModeAuth, async (req: Request, res: Response) => {
+router.post('/products/:id/consume', async (req: Request, res: Response) => {
     try {
-        const user = req.user as SimpleUser;
+        const user = req.user;
+        if (!user) {
+            res.status(401).json({
+                success: false,
+                message: 'Usuario no autenticado',
+                timestamp: new Date().toISOString()
+            });
+            return;
+        }
+
         const { id } = req.params;
         const { consumedDate, rating, notes } = req.body;
 
         // Solo consumidores pueden marcar productos como consumidos
-        if (user.role !== 'consumer' && user.role !== 'admin') {
+        if (user.role.toLowerCase() !== 'consumer' && user.role.toLowerCase() !== 'admin') {
             res.status(403).json({
                 success: false,
                 message: 'Solo los consumidores pueden marcar productos como consumidos',
@@ -376,17 +555,23 @@ router.post('/products/:id/consume', devModeAuth, async (req: Request, res: Resp
             return;
         }
 
-        console.log(`🔧 Marcando producto ${id} como consumido por ${user.userId} (${user.role})`);
+        // Mapear el rol del authMiddleware al formato interno para Fabric
+        const normalizedRole = user.role.toLowerCase();
+        const userId = normalizedRole === 'producer' || normalizedRole === 'admin' 
+            ? 'User1@org1.example.com' 
+            : 'User1@org2.example.com';
+
+        console.log(`🔧 Marcando producto ${id} como consumido por ${userId} (${user.role})`);
 
         const result = await fabricGatewayService.submitTransactionAsUser(
-            user.userId,
-            user.role,
+            userId,
+            normalizedRole,
             'food',
             'markAsConsumed',
             id,
             consumedDate || new Date().toISOString(),
             rating ? rating.toString() : '',
-            notes || `Consumido por ${user.name}`
+            notes || `Consumido por ${user.name || 'Usuario'}`
         );
 
         res.json({
@@ -394,7 +579,7 @@ router.post('/products/:id/consume', devModeAuth, async (req: Request, res: Resp
             message: 'Producto marcado como consumido exitosamente',
             data: {
                 result,
-                consumedBy: `${user.name} (${user.role})`
+                consumedBy: `${user.name || 'Usuario'} (${user.role})`
             },
             timestamp: new Date().toISOString()
         });

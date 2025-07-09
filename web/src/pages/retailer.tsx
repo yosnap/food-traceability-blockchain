@@ -242,33 +242,7 @@ export default function RetailerDashboard() {
     setShowTransferModal(true);
   };
 
-  const handleTransferComplete = (product: Product, toRole: UserRole, recipient: any) => {
-    // Update product status to CONSUMED (sold)
-    setProducts(prevProducts => 
-      prevProducts.map(p => 
-        p.id === product.id 
-          ? { 
-              ...p, 
-              status: ProductStatus.CONSUMED, 
-              currentLocation: `Vendido a ${recipient.name}`,
-              metadata: {
-                ...p.metadata,
-                transferHistory: [
-                  ...(p.metadata.transferHistory || []),
-                  {
-                    timestamp: new Date().toISOString(),
-                    fromRole: UserRole.RETAILER,
-                    toRole,
-                    recipient: recipient.name,
-                    location: recipient.location
-                  }
-                ]
-              }
-            }
-          : p
-      )
-    );
-
+  const handleTransferComplete = async (product: Product, toRole: UserRole, recipient: any) => {
     // Update stats
     setStats(prevStats => ({
       ...prevStats,
@@ -279,6 +253,10 @@ export default function RetailerDashboard() {
     toast.success(`Producto "${product.name}" vendido exitosamente a ${recipient.name}`, { id: 'sale-success' });
     setShowTransferModal(false);
     setSelectedProduct(null);
+    
+    // Recargar productos del blockchain para obtener el estado actualizado
+    toast('Actualizando productos...', { icon: '🔄' });
+    await loadDashboardData();
   };
 
   if (isInitialLoad) {

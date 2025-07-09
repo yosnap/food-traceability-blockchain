@@ -229,33 +229,7 @@ export default function ProcessorDashboard() {
     setShowTransferModal(true);
   };
 
-  const handleTransferComplete = (product: Product, toRole: UserRole, recipient: any) => {
-    // Update product status to IN_TRANSIT
-    setProducts(prevProducts => 
-      prevProducts.map(p => 
-        p.id === product.id 
-          ? { 
-              ...p, 
-              status: ProductStatus.IN_TRANSIT, 
-              currentLocation: `En tránsito hacia ${recipient.name}`,
-              metadata: {
-                ...p.metadata,
-                transferHistory: [
-                  ...(p.metadata.transferHistory || []),
-                  {
-                    timestamp: new Date().toISOString(),
-                    fromRole: UserRole.PROCESSOR,
-                    toRole,
-                    recipient: recipient.name,
-                    location: recipient.location
-                  }
-                ]
-              }
-            }
-          : p
-      )
-    );
-
+  const handleTransferComplete = async (product: Product, toRole: UserRole, recipient: any) => {
     // Update stats
     setStats(prevStats => ({
       ...prevStats,
@@ -266,6 +240,10 @@ export default function ProcessorDashboard() {
     toast.success(`Producto procesado "${product.name}" transferido exitosamente a ${recipient.name}`, { id: 'transfer-success' });
     setShowTransferModal(false);
     setSelectedProduct(null);
+    
+    // Recargar productos del blockchain para obtener el estado actualizado
+    toast('Actualizando productos...', { icon: '🔄' });
+    await loadDashboardData();
   };
 
   if (isInitialLoad) {

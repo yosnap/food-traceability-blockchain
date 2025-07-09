@@ -444,11 +444,12 @@ export class FabricGatewayService {
             name: string;
             quantity: number;
             [key: string]: any; // Permitir propiedades adicionales
-        }
+        },
+        ownerAddress?: string // Permitir pasar la dirección directamente
     ): Promise<string> {
         
-        // Obtener dirección del wallet del usuario productor
-        const ownerAddress = await this.getUserWalletAddress(producerUserId);
+        // Usar la dirección proporcionada o generar una basada en el userId
+        const finalOwnerAddress = ownerAddress || await this.getUserWalletAddress(producerUserId);
         
         // Crear estructura de atributos con todos los datos del producto
         const attributes = {
@@ -464,7 +465,7 @@ export class FabricGatewayService {
             volume: productData.volume || 0,
             brand: productData.brand || '',
             signature: productData.signature || '',
-            walletAddress: productData.walletAddress || ownerAddress,
+            walletAddress: productData.walletAddress || finalOwnerAddress,
             // Incluir cualquier atributo adicional
             ...Object.fromEntries(
                 Object.entries(productData).filter(([key]) => 
@@ -475,7 +476,7 @@ export class FabricGatewayService {
 
         console.log(`🔧 Creando producto simplificado:`, {
             tokenId: productData.id,
-            ownerAddress,
+            ownerAddress: finalOwnerAddress,
             name: productData.name,
             amount: productData.quantity,
             attributesCount: Object.keys(attributes).length
@@ -487,7 +488,7 @@ export class FabricGatewayService {
             'food',
             'createProduct',
             productData.id,           // tokenId
-            ownerAddress,             // ownerAddress  
+            finalOwnerAddress,        // ownerAddress  
             productData.name,         // name
             productData.quantity.toString(), // amount
             JSON.stringify(attributes)       // attributesJSON
@@ -497,7 +498,7 @@ export class FabricGatewayService {
     /**
      * Obtiene la dirección del wallet de un usuario (simulada por ahora)
      */
-    private async getUserWalletAddress(userId: string): Promise<string> {
+    async getUserWalletAddress(userId: string): Promise<string> {
         // Por ahora simular una dirección basada en el userId
         // En una implementación real, esto vendría de la base de datos o del sistema de wallets
         const hash = crypto.createHash('sha256').update(userId).digest('hex');
@@ -552,12 +553,15 @@ export class FabricGatewayService {
             price?: number;
             conditions?: string;
             notes?: string;
-        }
+        },
+        currentOwnerAddress?: string // Parámetro opcional para dirección real
     ): Promise<string> {
         console.log(`🔄 [${currentOwnerUserId}] Transfiriendo asset ${transferData.assetId} a ${transferData.newOwner}`);
         
-        // Obtener la dirección del propietario actual (necesaria para SimpleContract)
-        const currentOwnerAddress = await this.getUserWalletAddress(currentOwnerUserId);
+        // CRITICAL: Usar la dirección proporcionada o generar una basada en el userId
+        const finalCurrentOwnerAddress = currentOwnerAddress || await this.getUserWalletAddress(currentOwnerUserId);
+        
+        console.log(`🔧 DEBUG: Transfer addresses - currentOwnerAddress: ${currentOwnerAddress}, finalCurrentOwnerAddress: ${finalCurrentOwnerAddress}`);
         
         return await this.submitTransactionAsUser(
             currentOwnerUserId,
@@ -565,7 +569,7 @@ export class FabricGatewayService {
             'food',
             'transferProduct',
             transferData.assetId,                    // tokenId
-            currentOwnerAddress,                     // fromOwner
+            finalCurrentOwnerAddress,                // fromOwner (usar la dirección correcta)
             transferData.newOwner,                   // toOwner  
             transferData.quantity?.toString() || '1', // amount
             transferData.transferType,               // transferType
@@ -607,6 +611,49 @@ export class FabricGatewayService {
             console.error('❌ Error obteniendo todos los productos:', error.message);
             return [];
         }
+    }
+
+    /**
+     * Obtiene productos de un propietario específico
+     */
+    async getProductsByOwner(ownerAddress: string): Promise<any[]> {
+        try {
+            const result = await this.evaluateTransactionAsUser(
+                'admin',
+                'admin',
+                'food',
+                'getProductsByOwner',
+                ownerAddress
+            );
+            const products = JSON.parse(result);
+            console.log(`✅ Obtenidos ${products.length} productos para propietario ${ownerAddress}`);
+            return products;
+        } catch (error: any) {
+            console.error(`❌ Error obteniendo productos del propietario ${ownerAddress}:`, error.message);
+            return [];
+        }
+    }
+
+    /**
+     * Migra un producto existente a una nueva dirección de propietario
+     */
+    async migrateProductOwner(
+        adminUserId: string,
+        tokenId: string,
+        oldOwnerAddress: string,
+        newOwnerAddress: string
+    ): Promise<string> {
+        console.log(`🔄 Migrando producto ${tokenId} de ${oldOwnerAddress} a ${newOwnerAddress}`);
+        
+        return await this.submitTransactionAsUser(
+            adminUserId,
+            'admin',
+            'food',
+            'migrateProductOwner',
+            tokenId,
+            oldOwnerAddress,
+            newOwnerAddress
+        );
     }
 
     /**
