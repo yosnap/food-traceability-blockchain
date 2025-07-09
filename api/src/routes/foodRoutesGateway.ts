@@ -595,4 +595,38 @@ router.post('/products/:id/consume', async (req: Request, res: Response) => {
     }
 });
 
+/**
+ * Obtener transferencias realizadas por el usuario actual
+ */
+router.get('/transfers', async (req: Request, res: Response) => {
+    try {
+        const user = req.user;
+        if (!user) {
+            res.status(401).json({
+                success: false,
+                message: 'Usuario no autenticado',
+                timestamp: new Date().toISOString()
+            });
+            return;
+        }
+
+        const transfers = await fabricGatewayService.getTransfersByOwner(user.address);
+        
+        res.json({
+            success: true,
+            data: transfers,
+            timestamp: new Date().toISOString()
+        });
+
+    } catch (error: any) {
+        console.error('❌ Error obteniendo transferencias:', error.message);
+        res.status(500).json({
+            success: false,
+            message: 'Error obteniendo transferencias',
+            error: error.message,
+            timestamp: new Date().toISOString()
+        });
+    }
+});
+
 export default router;

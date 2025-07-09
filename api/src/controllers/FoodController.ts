@@ -410,6 +410,37 @@ export class FoodController {
             next(error);
         }
     }
+
+    /**
+     * Obtiene las transferencias realizadas por un propietario
+     */
+    static async getTransfersByOwner(req: Request, res: Response, next: NextFunction): Promise<void> {
+        try {
+            const user = req.user;
+            if (!user) {
+                res.status(401).json({
+                    success: false,
+                    error: {
+                        message: 'Usuario no autenticado',
+                        code: 'UNAUTHORIZED',
+                        timestamp: new Date().toISOString()
+                    }
+                });
+                return;
+            }
+
+            const transfers = await fabricGatewayService.getTransfersByOwner(user.address);
+            
+            res.json({
+                success: true,
+                data: transfers,
+                timestamp: new Date().toISOString()
+            });
+
+        } catch (error) {
+            next(error);
+        }
+    }
 }
 
 // Validaciones para crear producto

@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { XMarkIcon, ArrowRightIcon } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
 import { Product, UserRole, TransferType } from '@/types';
-import { transferProduct } from '@/utils/api';
+import { transferProduct, getTransferRecipients } from '@/utils/api';
+import { MockUser } from '@/data/mockUsers';
 
 interface TransferModalProps {
   isOpen: boolean;
@@ -30,39 +31,63 @@ const roleNames = {
   [UserRole.ADMIN]: 'Administrador'
 };
 
-const mockRecipients = {
-  [UserRole.PROCESSOR]: [
-    { id: 'proc-001', name: 'Procesadora Valle Verde', location: 'Zona Industrial San José', capacity: '1000kg/día' },
-    { id: 'proc-002', name: 'Alimentos Premium S.A.', location: 'Cartago Centro', capacity: '500kg/día' },
-    { id: 'proc-003', name: 'Industrias Naturales', location: 'Heredia Norte', capacity: '2000kg/día' }
-  ],
-  [UserRole.DISTRIBUTOR]: [
-    { id: 'dist-001', name: 'Logística Valle Central', location: 'Centro de Distribución Principal', fleet: '20 camiones' },
-    { id: 'dist-002', name: 'TransFresh Costa Rica', location: 'San José Puerto', fleet: '15 camiones' },
-    { id: 'dist-003', name: 'Distribuidora Nacional', location: 'Alajuela Centro', fleet: '30 camiones' }
-  ],
-  [UserRole.RETAILER]: [
-    { id: 'ret-001', name: 'Supermercado Valle Verde', location: 'Centro Comercial Plaza Norte', type: 'Supermercado' },
-    { id: 'ret-002', name: 'Mercado Orgánico Fresh', location: 'San Pedro Centro', type: 'Tienda Especializada' },
-    { id: 'ret-003', name: 'MegaMarket Costa Rica', location: 'Escazú Village', type: 'Hipermercado' }
-  ],
-  [UserRole.CONSUMER]: [
-    { id: 'cons-001', name: 'María González', location: 'San José, Escazú', type: 'Consumidor Regular' },
-    { id: 'cons-002', name: 'Carlos Rodríguez', location: 'Cartago Centro', type: 'Consumidor Premium' },
-    { id: 'cons-003', name: 'Ana Morales', location: 'Heredia Norte', type: 'Consumidor Eco' }
-  ]
-};
-
 export default function TransferModal({ isOpen, onClose, product, fromRole, onTransferComplete }: TransferModalProps) {
   const [selectedRole, setSelectedRole] = useState<UserRole | ''>('');
-  const [selectedRecipient, setSelectedRecipient] = useState<any>(null);
+  const [selectedRecipient, setSelectedRecipient] = useState<MockUser | null>(null);
   const [notes, setNotes] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [availableRecipients, setAvailableRecipients] = useState<MockUser[]>([]);
+  const [allRecipients, setAllRecipients] = useState<Record<string, MockUser[]>>({});
+  const [isLoadingRecipients, setIsLoadingRecipients] = useState(false);
+
+  // Load available recipients from API
+  useEffect(() => {
+    const loadRecipients = async () => {
+      setIsLoadingRecipients(true);
+      try {
+        const response = await getTransferRecipients();
+        console.log('🔍 API response:', response);
+        if (response.success) {
+          console.log('🔍 Recipients data:', response.data);
+          setAllRecipients(response.data);
+        } else {
+          console.error('Error loading recipients:', response.message);
+          toast.error('Error cargando destinatarios disponibles');
+        }
+      } catch (error: any) {
+        console.error('Error loading recipients:', error);
+        toast.error('Error cargando destinatarios');
+      } finally {
+        setIsLoadingRecipients(false);
+      }
+    };
+
+    if (isOpen) {
+      loadRecipients();
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (selectedRole && allRecipients) {
+      // Convertir selectedRole a mayúsculas para que coincida con las claves de la API
+      const roleKey = selectedRole.toString().toUpperCase();
+      const recipients = allRecipients[roleKey] || [];
+      console.log('🔍 TransferModal recipients mapping:', {
+        selectedRole,
+        roleKey,
+        availableKeys: Object.keys(allRecipients),
+        recipientsCount: recipients.length,
+        recipients: recipients.map(r => r.name)
+      });
+      setAvailableRecipients(recipients);
+    } else {
+      setAvailableRecipients([]);
+    }
+  }, [selectedRole, allRecipients]);
 
   if (!isOpen || !product) return null;
 
   const availableRoles = roleTransitions[fromRole] || [];
-  const availableRecipients = selectedRole ? mockRecipients[selectedRole as UserRole] || [] : [];
 
   const handleTransfer = async () => {
     if (!selectedRole || !selectedRecipient) {
@@ -75,12 +100,12 @@ export default function TransferModal({ isOpen, onClose, product, fromRole, onTr
     try {
       // Preparar datos para la API
       const transferData = {
-        newOwner: selectedRecipient.id,
+        newOwner: selectedRecipient.walletAddress, // Usar dirección de wallet real
         transferType: TransferType.PROCESSING, // Tipo de transferencia apropiado
         location: {
           address: selectedRecipient.location,
-          city: 'Ciudad', // Se puede extraer de selectedRecipient.location si tiene más datos
-          country: 'España'
+          city: selectedRecipient.location.split(',')[1]?.trim() || 'Ciudad',
+          country: 'Costa Rica'
         },
         quantity: product.quantity || 1,
         conditions: `Transferencia de ${roleNames[fromRole]} a ${roleNames[selectedRole as UserRole]}`,
@@ -190,8 +215,18 @@ export default function TransferModal({ isOpen, onClose, product, fromRole, onTr
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Seleccionar destinatario:
               </label>
-              <div className="space-y-2">
-                {availableRecipients.map(recipient => (
+              {isLoadingRecipients ? (
+                <div className="p-4 text-center text-gray-500">
+                  <div className="animate-spin w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full mx-auto mb-2"></div>
+                  Cargando destinatarios...
+                </div>
+              ) : availableRecipients.length === 0 ? (
+                <div className="p-4 text-center text-gray-500">
+                  No hay destinatarios disponibles para {roleNames[selectedRole as UserRole]}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {availableRecipients.map(recipient => (
                   <div
                     key={recipient.id}
                     onClick={() => setSelectedRecipient(recipient)}
@@ -203,12 +238,14 @@ export default function TransferModal({ isOpen, onClose, product, fromRole, onTr
                   >
                     <div className="font-medium text-gray-900">{recipient.name}</div>
                     <div className="text-sm text-gray-600">{recipient.location}</div>
-                    <div className="text-xs text-gray-500">
-                      {recipient.capacity || recipient.fleet || recipient.type}
+                    <div className="text-xs text-gray-500">{recipient.organization}</div>
+                    <div className="text-xs text-gray-400 mt-1">
+                      <span className="font-mono">{recipient.walletAddress.slice(0, 6)}...{recipient.walletAddress.slice(-4)}</span>
                     </div>
                   </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

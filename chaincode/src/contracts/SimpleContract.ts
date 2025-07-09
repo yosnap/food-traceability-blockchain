@@ -134,7 +134,7 @@ export class SimpleContract extends Contract {
     }
 
     /**
-     * Obtener productos por propietario
+     * Obtener productos por propietario usando búsqueda directa por clave compuesta
      */
     @Transaction(false)
     @Returns('string')
@@ -145,20 +145,37 @@ export class SimpleContract extends Contract {
             throw new Error('Dirección del propietario requerida');
         }
 
-        const iterator = await ctx.stub.getStateByRange('product:', 'product:~');
+        // Usar búsqueda por rango específico para el propietario
+        const startKey = `product:`;
+        const endKey = `product:~`;
+        const iterator = await ctx.stub.getStateByRange(startKey, endKey);
         const products = [];
 
         while (true) {
             const result = await iterator.next();
             if (result.value && result.value.value.toString()) {
                 try {
+                    const key = result.value.key;
                     const product = JSON.parse(result.value.value.toString());
-                    // Filtrar productos que pertenecen al propietario
-                    if (product.owner === ownerAddress) {
-                        products.push(product);
+                    
+                    console.log(`🔍 Evaluando producto - Key: ${key}, Owner en data: ${product.owner}, Buscando: ${ownerAddress}`);
+                    
+                    // Verificar que la clave termina con la dirección del propietario
+                    // Formato esperado: product:TOKENID:OWNERADDRESS
+                    const keyParts = key.split(':');
+                    if (keyParts.length === 3 && keyParts[2] === ownerAddress) {
+                        // Doble verificación: el owner en el objeto debe coincidir también
+                        if (product.owner === ownerAddress) {
+                            products.push(product);
+                            console.log(`✅ Producto incluido: ${product.id} para ${ownerAddress}`);
+                        } else {
+                            console.log(`⚠️ Inconsistencia detectada: Key indica ${keyParts[2]} pero object.owner es ${product.owner}`);
+                        }
+                    } else {
+                        console.log(`🔍 Producto omitido: Key ${key} no corresponde al propietario ${ownerAddress}`);
                     }
                 } catch (error) {
-                    console.log('Error parsing product:', error);
+                    console.log(`❌ Error parsing product con key ${result.value.key}:`, error);
                 }
             }
             if (result.done) {
@@ -284,12 +301,20 @@ export class SimpleContract extends Contract {
         const timestamp = ctx.stub.getTxTimestamp();
         const updatedAt = new Date(Number(timestamp.seconds) * 1000 + Math.floor(Number(timestamp.nanos) / 1000000)).toISOString();
         
+        // Convertir ambos a números para comparación correcta
+        const productAmount = Number(product.amount);
+        const transferAmount = Number(amount);
+        
+        console.log(`🔍 Verificando transferencia: productAmount=${productAmount} (${typeof productAmount}), transferAmount=${transferAmount} (${typeof transferAmount})`);
+        
         // Si es transferencia total, eliminar producto original
-        if (product.amount === amount) {
+        if (productAmount === transferAmount) {
+            console.log(`✅ Transferencia completa: eliminando clave ${fromKey}`);
             await ctx.stub.deleteState(fromKey);
         } else {
             // Transferencia parcial - reducir cantidad original
-            product.amount -= amount;
+            console.log(`🔄 Transferencia parcial: reduciendo de ${productAmount} a ${productAmount - transferAmount}`);
+            product.amount = productAmount - transferAmount;
             product.updatedAt = updatedAt;
             await ctx.stub.putState(fromKey, Buffer.from(JSON.stringify(product)));
         }
@@ -343,7 +368,58 @@ export class SimpleContract extends Contract {
             timestamp: updatedAt
         })));
 
+        // Registrar transferencia en el histórico global
+        const transferKey = `transfer:${tokenId}:${updatedAt}`;
+        const transferRecord = {
+            tokenId,
+            from: fromOwner,
+            to: toOwner,
+            amount,
+            transferType,
+            timestamp: updatedAt,
+            notes
+        };
+        await ctx.stub.putState(transferKey, Buffer.from(JSON.stringify(transferRecord)));
+
         console.log(`✅ Producto ${tokenId} transferido exitosamente de ${fromOwner} a ${toOwner}`);
         return `Producto ${tokenId} transferido: ${amount} unidades de ${fromOwner} a ${toOwner}`;
+    }
+
+    /**
+     * Obtener transferencias realizadas por un propietario
+     */
+    @Transaction(false)
+    @Returns('string')
+    public async getTransfersByOwner(ctx: Context, ownerAddress: string): Promise<string> {
+        console.log(`🔍 Buscando transferencias para propietario: ${ownerAddress}`);
+        
+        if (!ownerAddress) {
+            throw new Error('Dirección del propietario requerida');
+        }
+
+        const iterator = await ctx.stub.getStateByRange('transfer:', 'transfer:~');
+        const transfers = [];
+
+        while (true) {
+            const result = await iterator.next();
+            if (result.value && result.value.value.toString()) {
+                try {
+                    const transfer = JSON.parse(result.value.value.toString());
+                    // Filtrar transferencias donde este propietario es el remitente
+                    if (transfer.from === ownerAddress) {
+                        transfers.push(transfer);
+                    }
+                } catch (error) {
+                    console.log(`❌ Error parsing transfer con key ${result.value.key}:`, error);
+                }
+            }
+            if (result.done) {
+                await iterator.close();
+                break;
+            }
+        }
+
+        console.log(`✅ Encontradas ${transfers.length} transferencias para ${ownerAddress}`);
+        return JSON.stringify(transfers);
     }
 }

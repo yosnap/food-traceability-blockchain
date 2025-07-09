@@ -145,6 +145,22 @@ export const getUserStats = async (): Promise<ApiResponse<UserStats>> => {
   return response.data;
 };
 
+// User Discovery
+export const getUsersByRole = async (role: string): Promise<ApiResponse<any[]>> => {
+  const response = await api.get(`/api/discovery/users/by-role/${role}`);
+  return response.data;
+};
+
+export const getTransferRecipients = async (): Promise<ApiResponse<Record<string, any[]>>> => {
+  const response = await api.get('/api/discovery/users/transfer-recipients');
+  return response.data;
+};
+
+export const getUserByWalletAddress = async (address: string): Promise<ApiResponse<any>> => {
+  const response = await api.get(`/api/discovery/users/by-wallet/${address}`);
+  return response.data;
+};
+
 // Food Products
 export const pingChaincode = async (): Promise<ApiResponse> => {
   const response = await api.get('/api/food/ping');
@@ -515,6 +531,19 @@ export const walletService = {
   signCreateToken: async (...args: any[]) => {
     const service = await getWalletService();
     return service.signCreateToken(...args);
+  }
+};
+
+/**
+ * Obtener transferencias realizadas por el usuario actual
+ */
+export const getMyTransfers = async (): Promise<ApiResponse<any[]>> => {
+  try {
+    const response: AxiosResponse<ApiResponse<any[]>> = await api.get('/api/food/transfers');
+    return response.data;
+  } catch (error) {
+    console.error('Error obteniendo transferencias:', error);
+    throw error;
   }
 };
 

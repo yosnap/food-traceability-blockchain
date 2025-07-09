@@ -33,6 +33,7 @@ export default function ReportsPage() {
   const router = useRouter();
   const { user } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
+  const [transfers, setTransfers] = useState<any[]>([]);
   const [stats, setStats] = useState<ReportStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedDateRange, setSelectedDateRange] = useState('30'); // días
@@ -80,11 +81,14 @@ export default function ReportsPage() {
     try {
       console.log('📊 Cargando datos para reportes...');
       
-      // Importar funciones de API para cargar productos reales
-      const { getMyProducts } = await import('@/utils/api');
+      // Importar funciones de API para cargar productos y transferencias reales
+      const { getMyProducts, getMyTransfers } = await import('@/utils/api');
       
       // Cargar productos del usuario autenticado
       const productsResponse = await getMyProducts();
+      
+      // Cargar transferencias del usuario autenticado
+      const transfersResponse = await getMyTransfers();
       
       if (productsResponse.success && productsResponse.data) {
         console.log('✅ Productos cargados para reportes:', productsResponse.data);
@@ -100,6 +104,7 @@ export default function ReportsPage() {
           currentLocation: foodAsset.origin?.farmName || foodAsset.attributes?.origin?.farmName || 'Sin ubicación',
           temperature: foodAsset.storageConditions?.temperature || foodAsset.attributes?.storageConditions?.temperature || 4,
           humidity: foodAsset.storageConditions?.humidity || foodAsset.attributes?.storageConditions?.humidity || 85,
+          quantity: foodAsset.amount || 1, // Mapear el campo amount del blockchain como quantity
           producer: {
             id: 'current-user',
             name: foodAsset.origin?.farmName || foodAsset.attributes?.origin?.farmName || 'Finca Demo',
@@ -118,14 +123,20 @@ export default function ReportsPage() {
         
         setProducts(convertedProducts);
         
+        // Obtener transferencias si están disponibles
+        const transfersData = transfersResponse.success ? transfersResponse.data : [];
+        console.log('✅ Transferencias cargadas:', transfersData);
+        setTransfers(transfersData);
+        
         // Calcular estadísticas
-        const reportStats = calculateStats(convertedProducts);
+        const reportStats = calculateStats(convertedProducts, transfersData);
         setStats(reportStats);
         
         console.log('✅ Reportes actualizados correctamente');
       } else {
         console.log('ℹ️ No se encontraron productos para reportes');
         setProducts([]);
+        setTransfers([]);
         setStats(null);
         console.log('ℹ️ No hay datos disponibles para generar reportes');
       }
@@ -134,42 +145,44 @@ export default function ReportsPage() {
       console.error('❌ Error al cargar datos de reportes:', error);
       toast.error(`Error al cargar reportes: ${error.message}`);
       setProducts([]);
+      setTransfers([]);
       setStats(null);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const calculateStats = (products: Product[]): ReportStats => {
+  const calculateStats = (products: Product[], transfers: any[] = []): ReportStats => {
     const now = new Date();
     const cutoffDate = new Date();
     cutoffDate.setDate(now.getDate() - parseInt(selectedDateRange));
 
-    // Filtrar productos por rango de fecha
-    const filteredProducts = products.filter(product => {
-      const productDate = new Date(product.productionDate);
-      return productDate >= cutoffDate;
-    });
-
-    const totalProducts = filteredProducts.length;
-    const activeProducts = filteredProducts.filter(p => p.status === ProductStatus.ACTIVE).length;
-    const expiredProducts = filteredProducts.filter(p => {
+    // Usar TODOS los productos para las estadísticas principales
+    // Solo las transferencias se filtran por fecha
+    const totalProducts = products.length;
+    const activeProducts = products.filter(p => p.status === ProductStatus.ACTIVE).length;
+    const expiredProducts = products.filter(p => {
       const expirationInfo = calculateExpirationInfo(p);
       return expirationInfo.urgencyLevel === 'critical' || new Date(p.expirationDate) < now;
     }).length;
-    const transferredProducts = filteredProducts.filter(p => p.status === ProductStatus.IN_TRANSIT).length;
+    
+    // Solo filtrar transferencias por rango de fecha
+    const transferredProducts = transfers.filter(transfer => {
+      const transferDate = new Date(transfer.timestamp);
+      return transferDate >= cutoffDate;
+    }).length;
 
-    // Calcular vida útil promedio
-    const shelfLives = filteredProducts.map(p => {
+    // Calcular vida útil promedio de TODOS los productos
+    const shelfLives = products.map(p => {
       const production = new Date(p.productionDate);
       const expiration = new Date(p.expirationDate);
       return Math.ceil((expiration.getTime() - production.getTime()) / (1000 * 60 * 60 * 24));
     });
     const avgShelfLife = shelfLives.length > 0 ? Math.round(shelfLives.reduce((a, b) => a + b, 0) / shelfLives.length) : 0;
 
-    // Breakdown por categoría
+    // Breakdown por categoría de TODOS los productos
     const categoryBreakdown: { [key: string]: number } = {};
-    filteredProducts.forEach(p => {
+    products.forEach(p => {
       const category = p.metadata.category || 'Sin categoría';
       categoryBreakdown[category] = (categoryBreakdown[category] || 0) + 1;
     });
@@ -400,7 +413,7 @@ export default function ReportsPage() {
                     <h3 className="text-lg font-semibold text-gray-900 mb-4">Resumen del Período</h3>
                     <div className="space-y-3">
                       <div className="flex justify-between items-center">
-                        <span className="text-gray-700">Período analizado</span>
+                        <span className="text-gray-700">Período para transferencias</span>
                         <span className="font-medium text-gray-900">Últimos {selectedDateRange} días</span>
                       </div>
                       <div className="flex justify-between items-center">
@@ -481,6 +494,87 @@ export default function ReportsPage() {
                       </tbody>
                     </table>
                   </div>
+                </div>
+
+                {/* Transfer History */}
+                <div className="card">
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-lg font-semibold text-gray-900">Historial de Transferencias</h3>
+                    <div className="text-sm text-gray-500">
+                      Últimas {transfers.length} transferencias
+                    </div>
+                  </div>
+
+                  {transfers.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Producto
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Destinatario
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Tipo
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Fecha
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Notas
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {transfers.slice(0, 10).map((transfer, index) => (
+                            <tr key={index}>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm font-medium text-gray-900">
+                                  {transfer.tokenId}
+                                </div>
+                                <div className="text-sm text-gray-500">
+                                  Cantidad: {transfer.amount}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm text-gray-900">
+                                  {transfer.to.slice(0, 6)}...{transfer.to.slice(-4)}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                  transfer.transferType === 'PROCESSING' ? 'bg-blue-100 text-blue-800' :
+                                  transfer.transferType === 'DISTRIBUTION' ? 'bg-green-100 text-green-800' :
+                                  transfer.transferType === 'SALE' ? 'bg-purple-100 text-purple-800' :
+                                  'bg-gray-100 text-gray-800'
+                                }`}>
+                                  {transfer.transferType}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                <SafeDate date={transfer.timestamp} />
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {transfer.notes || 'Sin notas'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="text-center py-12">
+                      <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <ChartBarIcon className="w-8 h-8 text-gray-400" />
+                      </div>
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">Sin transferencias</h3>
+                      <p className="text-gray-600">
+                        No hay transferencias registradas en este período
+                      </p>
+                    </div>
+                  )}
                 </div>
               </>
             ) : (

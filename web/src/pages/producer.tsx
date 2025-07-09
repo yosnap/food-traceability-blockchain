@@ -139,11 +139,14 @@ export default function ProducerDashboard() {
     try {
       console.log('🔄 Cargando productos del usuario...');
       
-      // Importar funciones de API para cargar productos reales
-      const { getMyProducts, getUserStats } = await import('@/utils/api');
+      // Importar funciones de API para cargar productos y transferencias reales
+      const { getMyProducts, getMyTransfers, getUserStats } = await import('@/utils/api');
       
       // Cargar productos del usuario autenticado
       const productsResponse = await getMyProducts();
+      
+      // Cargar transferencias del usuario autenticado
+      const transfersResponse = await getMyTransfers();
       
       if (productsResponse.success && productsResponse.data) {
         console.log('✅ Productos cargados desde blockchain:', productsResponse.data);
@@ -159,6 +162,7 @@ export default function ProducerDashboard() {
           currentLocation: foodAsset.origin?.farmName || foodAsset.attributes?.origin?.farmName || 'Sin ubicación',
           temperature: foodAsset.storageConditions?.temperature || foodAsset.attributes?.storageConditions?.temperature || 4,
           humidity: foodAsset.storageConditions?.humidity || foodAsset.attributes?.storageConditions?.humidity || 85,
+          quantity: foodAsset.amount || 1, // Mapear el campo amount del blockchain como quantity
           producer: {
             id: 'current-user',
             name: foodAsset.origin?.farmName || foodAsset.attributes?.origin?.farmName || 'Finca Demo',
@@ -186,14 +190,18 @@ export default function ProducerDashboard() {
         const activeProducts = uniqueProducts.filter(p => p.status === ProductStatus.ACTIVE).length;
         const expiringSoon = uniqueProducts.filter(p => isExpiringSoon(p.expirationDate)).length;
         
+        // Obtener transferencias reales del blockchain
+        const transfers = transfersResponse.success ? transfersResponse.data : [];
+        console.log('✅ Transferencias cargadas desde blockchain:', transfers);
+        
         setStats({
           totalProducts,
           activeProducts,
           expiringSoon,
-          transfers: 0 // Por ahora 0
+          transfers: transfers.length
         });
         
-        toast.success(`Dashboard actualizado - ${totalProducts} productos cargados`);
+        toast.success(`Dashboard actualizado - ${totalProducts} productos, ${transfers.length} transferencias cargadas`);
       } else {
         console.log('ℹ️ No se encontraron productos');
         // Mantener arrays vacíos si no hay productos reales
@@ -269,7 +277,6 @@ export default function ProducerDashboard() {
     }));
     
     // Recargar productos del blockchain para obtener el estado actualizado
-    toast('Actualizando productos...', { icon: '🔄' });
     await loadDashboardData();
   };
 
@@ -659,7 +666,7 @@ export default function ProducerDashboard() {
                               className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm flex items-center space-x-1"
                             >
                               <TrashIcon className="w-3 h-3" />
-                              <span>Eliminar</span>
+                              <span>Actualizar</span>
                             </button>
                             
                             {/* Botón de transferir con restricciones de caducidad */}
@@ -799,7 +806,7 @@ export default function ProducerDashboard() {
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Marca</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Finca</label>
                   <input
                     type="text"
                     name="brand"
@@ -864,9 +871,9 @@ export default function ProducerDashboard() {
                 <TrashIcon className="w-8 h-8 text-red-600" />
               </div>
               
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Eliminar Producto</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Actualizar Producto</h3>
               <p className="text-sm text-gray-600 mb-6">
-                ¿Estás seguro que deseas eliminar "{selectedProduct.name}"? 
+                ¿Estás seguro que deseas actualizar "{selectedProduct.name}"? 
                 Esta acción marcará el producto como inactivo pero mantendrá el historial en el blockchain.
               </p>
               
@@ -886,7 +893,7 @@ export default function ProducerDashboard() {
                   className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md"
                   disabled={isUpdating}
                 >
-                  {isUpdating ? 'Eliminando...' : 'Eliminar'}
+                  {isUpdating ? 'Actualizando...' : 'Actualizar'}
                 </button>
               </div>
             </div>

@@ -687,6 +687,21 @@ export class FabricGatewayService {
     }
 
     /**
+     * Obtener transferencias realizadas por un propietario
+     */
+    async getTransfersByOwner(ownerAddress: string): Promise<any[]> {
+        try {
+            const result = await this.evaluateTransactionAsUser('admin', 'admin', 'food', 'getTransfersByOwner', ownerAddress);
+            const transfers = JSON.parse(result);
+            console.log(`✅ Obtenidas ${transfers.length} transferencias para propietario ${ownerAddress}`);
+            return transfers;
+        } catch (error) {
+            console.error(`❌ Error obteniendo transferencias del propietario ${ownerAddress}:`, error.message);
+            return [];
+        }
+    }
+
+    /**
      * Verifica el estado de la conexión
      */
     isConnected(): boolean {

@@ -44,6 +44,8 @@ import authRoutes from './routes/authRoutes.js';
 console.log('🔧 DEBUG: authRoutes importado');
 import hlfRoutes from './routes/hlfRoutes.js';
 console.log('🔧 DEBUG: hlfRoutes importado');
+import userDiscoveryRoutes from './routes/userDiscoveryRoutes.js';
+console.log('🔧 DEBUG: userDiscoveryRoutes importado');
 
 console.log('🔧 DEBUG: Creando aplicación Express...');
 // Crear aplicación Express
@@ -138,6 +140,9 @@ app.get('/api/info', (req, res) => {
 
 // Rutas de usuarios (algunas públicas, otras protegidas)
 app.use('/api/users', userRoutes);
+
+// Rutas de descubrimiento de usuarios (protegidas)
+app.use('/api/discovery', userDiscoveryRoutes);
 
 // Rutas de productos (todas protegidas)
 // Usar las nuevas rutas Gateway que incluyen autenticación por roles
