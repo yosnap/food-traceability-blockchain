@@ -194,8 +194,8 @@ function handleMetaMaskToken(token: string) {
         return null;
     }
     
-    // Para desarrollo, aceptar cualquier dirección de MetaMask como PRODUCER
-    // En producción, esto debería verificarse en una base de datos
+    // Todas las direcciones de MetaMask son válidas
+    // Asignar rol PRODUCER por defecto, pero permitir escalabilidad de roles
     return {
         address: address,
         role: 'PRODUCER', // Por defecto, asignar rol PRODUCER

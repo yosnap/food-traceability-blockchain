@@ -36,6 +36,7 @@ export default function ProcessorReportsPage() {
   const router = useRouter();
   const { user } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
+  const [transfers, setTransfers] = useState<any[]>([]);
   const [stats, setStats] = useState<ProcessorReportStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedDateRange, setSelectedDateRange] = useState('30'); // días
@@ -84,10 +85,13 @@ export default function ProcessorReportsPage() {
       console.log('📊 Cargando datos para reportes de procesamiento...');
       
       // Importar funciones de API para cargar productos reales
-      const { getMyProducts } = await import('@/utils/api');
+      const { getMyProducts, getMyTransfers } = await import('@/utils/api');
       
       // Cargar productos del usuario autenticado
       const productsResponse = await getMyProducts();
+      
+      // Cargar transferencias del usuario autenticado
+      const transfersResponse = await getMyTransfers();
       
       if (productsResponse.success && productsResponse.data) {
         console.log('✅ Productos procesados cargados para reportes:', productsResponse.data);
@@ -121,12 +125,22 @@ export default function ProcessorReportsPage() {
         
         setProducts(convertedProducts);
         
+        // Calcular transferencias reales desde el blockchain
+        let actualTransfers = 0;
+        let transfersData = [];
+        if (transfersResponse.success && transfersResponse.data) {
+          actualTransfers = transfersResponse.data.length;
+          transfersData = transfersResponse.data;
+        }
+        
+        setTransfers(transfersData);
+        
         // Calcular estadísticas de procesamiento
         const reportStats: ProcessorReportStats = {
           totalBatches: convertedProducts.length,
           activeBatches: convertedProducts.filter(p => p.status === ProductStatus.ACTIVE).length,
           completedBatches: convertedProducts.filter(p => p.status === ProductStatus.IN_TRANSIT || p.status === ProductStatus.CONSUMED).length,
-          transferredProducts: convertedProducts.filter(p => p.status === ProductStatus.IN_TRANSIT).length,
+          transferredProducts: actualTransfers,
           avgProcessingTime: 2.5, // días promedio de procesamiento
           qualityMetrics: {
             'Temperatura Óptima': Math.round((convertedProducts.filter(p => p.temperature <= 4).length / convertedProducts.length) * 100),
@@ -415,11 +429,9 @@ export default function ProcessorReportsPage() {
                 )}
 
                 {/* Products Table */}
-                {(selectedReport === 'batches' || selectedReport === 'transfers') && (
+                {selectedReport === 'batches' && (
                   <div className="card">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-6">
-                      {selectedReport === 'batches' ? 'Lotes Procesados' : 'Historial de Transferencias'}
-                    </h3>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-6">Lotes Procesados</h3>
                     <div className="overflow-x-auto">
                       <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50">
@@ -442,48 +454,121 @@ export default function ProcessorReportsPage() {
                           </tr>
                         </thead>
                         <tbody className="bg-white divide-y divide-gray-200">
-                          {products
-                            .filter(p => selectedReport === 'transfers' ? p.status === ProductStatus.IN_TRANSIT : true)
-                            .map((product) => {
-                              const expirationInfo = calculateExpirationInfo(product);
-                              return (
-                                <tr key={product.id}>
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="flex items-center">
-                                      <BeakerIcon className="w-5 h-5 text-purple-500 mr-2" />
-                                      <div>
-                                        <div className="text-sm font-medium text-gray-900">{product.name}</div>
-                                        <div className="text-sm text-gray-500">{product.metadata.category}</div>
-                                      </div>
+                          {products.map((product) => {
+                            const expirationInfo = calculateExpirationInfo(product);
+                            return (
+                              <tr key={product.id}>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <div className="flex items-center">
+                                    <BeakerIcon className="w-5 h-5 text-purple-500 mr-2" />
+                                    <div>
+                                      <div className="text-sm font-medium text-gray-900">{product.name}</div>
+                                      <div className="text-sm text-gray-500">{product.metadata.category}</div>
                                     </div>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    {product.batchNumber}
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap">
-                                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                                      product.status === ProductStatus.ACTIVE ? 'bg-green-100 text-green-800' :
-                                      product.status === ProductStatus.IN_TRANSIT ? 'bg-blue-100 text-blue-800' :
-                                      'bg-gray-100 text-gray-800'
-                                    }`}>
-                                      {product.status}
-                                    </span>
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    <SafeDate date={product.expirationDate} />
-                                    {expirationInfo.urgencyLevel === 'warning' && (
-                                      <ExclamationTriangleIcon className="w-4 h-4 text-orange-500 inline ml-1" />
-                                    )}
-                                  </td>
-                                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                    {product.metadata.certification}
-                                  </td>
-                                </tr>
-                              );
-                            })}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                  {product.batchNumber}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                  <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                    product.status === ProductStatus.ACTIVE ? 'bg-green-100 text-green-800' :
+                                    product.status === ProductStatus.IN_TRANSIT ? 'bg-blue-100 text-blue-800' :
+                                    'bg-gray-100 text-gray-800'
+                                  }`}>
+                                    {product.status}
+                                  </span>
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                  <SafeDate date={product.expirationDate} />
+                                  {expirationInfo.urgencyLevel === 'warning' && (
+                                    <ExclamationTriangleIcon className="w-4 h-4 text-orange-500 inline ml-1" />
+                                  )}
+                                </td>
+                                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                  {product.metadata.certification}
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
+                  </div>
+                )}
+                
+                {/* Transfers Table */}
+                {selectedReport === 'transfers' && (
+                  <div className="card">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-6">Historial de Transferencias</h3>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Producto
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Destinatario
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Cantidad
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Tipo
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Fecha
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                              Notas
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {transfers.map((transfer, index) => (
+                            <tr key={index}>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="flex items-center">
+                                  <BeakerIcon className="w-5 h-5 text-purple-500 mr-2" />
+                                  <div>
+                                    <div className="text-sm font-medium text-gray-900">{transfer.tokenId}</div>
+                                    <div className="text-sm text-gray-500">{transfer.transferType}</div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                <div className="font-mono text-xs">
+                                  {transfer.to.substring(0, 6)}...{transfer.to.substring(transfer.to.length - 4)}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                {transfer.amount}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                                  {transfer.transferType}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                <SafeDate date={transfer.timestamp} />
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                {transfer.notes || 'Sin notas'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    
+                    {transfers.length === 0 && (
+                      <div className="text-center py-8">
+                        <DocumentTextIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">No hay transferencias registradas</h3>
+                        <p className="text-gray-600">Aún no has transferido ningún producto procesado.</p>
+                      </div>
+                    )}
                   </div>
                 )}
               </>

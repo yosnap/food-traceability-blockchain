@@ -1,6 +1,6 @@
 /**
- * Servicio HLF basado en el repositorio de referencia
- * Implementa autenticación con certificados X.509 siguiendo el patrón exacto de hlf.js
+ * Servicio HLF basado en el repositorio Fabric Samples
+ * Implementa autenticación con certificados X.509
  */
 
 import * as grpc from '@grpc/grpc-js';
@@ -101,7 +101,6 @@ export class HLFService {
 
     /**
      * Conecta a Fabric usando certificados X.509 de un usuario específico
-     * Siguiendo exactamente el patrón del repositorio de referencia
      */
     async connectFabric(userId: string, role: string): Promise<{ gateway: Gateway; contract: Contract }> {
         try {
@@ -126,7 +125,7 @@ export class HLFService {
             const CERT_USER = loadUserCertificate(userId, orgName);
             const KEY_USER = loadUserPrivateKey(userId, orgName);
 
-            // 4. Crear identidad (siguiendo patrón del repositorio de referencia)
+            // 4. Crear identidad
             const identity: Identity = {
                 mspId: mspId,
                 credentials: CERT_USER // Buffer del certificado X.509
@@ -136,7 +135,7 @@ export class HLFService {
             const privateKey = crypto.createPrivateKey(KEY_USER);
             const signer: Signer = signers.newPrivateKeySigner(privateKey);
 
-            // 6. Conectar al gateway (patrón exacto del repositorio de referencia)
+            // 6. Conectar al gateway
             const gateway = connect({
                 client: this.client,
                 identity,

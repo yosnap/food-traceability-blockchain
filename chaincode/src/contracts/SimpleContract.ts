@@ -145,6 +145,9 @@ export class SimpleContract extends Contract {
             throw new Error('Dirección del propietario requerida');
         }
 
+        // Normalizar la dirección a minúsculas para búsqueda consistente
+        const normalizedOwner = ownerAddress.toLowerCase();
+
         // Usar búsqueda por rango específico para el propietario
         const startKey = `product:`;
         const endKey = `product:~`;
@@ -160,12 +163,12 @@ export class SimpleContract extends Contract {
                     
                     console.log(`🔍 Evaluando producto - Key: ${key}, Owner en data: ${product.owner}, Buscando: ${ownerAddress}`);
                     
-                    // Verificar que la clave termina con la dirección del propietario
+                    // Verificar que la clave termina con la dirección del propietario (case-insensitive)
                     // Formato esperado: product:TOKENID:OWNERADDRESS
                     const keyParts = key.split(':');
-                    if (keyParts.length === 3 && keyParts[2] === ownerAddress) {
-                        // Doble verificación: el owner en el objeto debe coincidir también
-                        if (product.owner === ownerAddress) {
+                    if (keyParts.length === 3 && keyParts[2].toLowerCase() === normalizedOwner) {
+                        // Doble verificación: el owner en el objeto debe coincidir también (case-insensitive)
+                        if (product.owner.toLowerCase() === normalizedOwner) {
                             products.push(product);
                             console.log(`✅ Producto incluido: ${product.id} para ${ownerAddress}`);
                         } else {
@@ -273,18 +276,60 @@ export class SimpleContract extends Contract {
         toOwner: string,
         amount: number,
         transferType: string = 'TRANSFER',
-        notes: string = ''
+        notes: string = '',
+        deliveryTimeHours: number = 0
     ): Promise<string> {
-        console.log(`🔄 Transfiriendo producto: ${tokenId} de ${fromOwner} a ${toOwner}, cantidad: ${amount}`);
+        console.log(`🔄 Transfiriendo producto: ${tokenId} de ${fromOwner} a ${toOwner}, cantidad: ${amount}, tiempo entrega: ${deliveryTimeHours}h`);
 
         // Validar parámetros
         if (!tokenId || !fromOwner || !toOwner || amount <= 0) {
             throw new Error('Parámetros de transferencia inválidos');
         }
 
-        // Obtener producto original
-        const fromKey = `product:${tokenId}:${fromOwner}`;
-        const productBytes = await ctx.stub.getState(fromKey);
+        // Obtener producto original usando búsqueda case-insensitive
+        const normalizedFromOwner = fromOwner.toLowerCase();
+        let productBytes: Uint8Array | null = null;
+        let fromKey = '';
+        
+        // Primero intentar búsqueda directa
+        const directKey = `product:${tokenId}:${fromOwner}`;
+        productBytes = await ctx.stub.getState(directKey);
+        
+        if (!productBytes || productBytes.length === 0) {
+            // Si no se encuentra, buscar con case-insensitive
+            console.log(`🔍 Búsqueda directa falló, intentando búsqueda case-insensitive para ${tokenId}:${fromOwner}`);
+            
+            const startKey = `product:${tokenId}:`;
+            const endKey = `product:${tokenId}:~`;
+            const iterator = await ctx.stub.getStateByRange(startKey, endKey);
+            
+            while (true) {
+                const result = await iterator.next();
+                if (result.value && result.value.value.toString()) {
+                    try {
+                        const key = result.value.key;
+                        const keyParts = key.split(':');
+                        
+                        // Verificar que la clave termina con la dirección del propietario (case-insensitive)
+                        if (keyParts.length === 3 && keyParts[2].toLowerCase() === normalizedFromOwner) {
+                            productBytes = result.value.value;
+                            fromKey = key;
+                            console.log(`✅ Producto encontrado con clave: ${key}`);
+                            await iterator.close();
+                            break;
+                        }
+                    } catch (error) {
+                        console.log(`❌ Error parsing product key ${result.value.key}:`, error);
+                    }
+                }
+                if (result.done) {
+                    await iterator.close();
+                    break;
+                }
+            }
+        } else {
+            fromKey = directKey;
+        }
         
         if (!productBytes || productBytes.length === 0) {
             throw new Error(`Producto ${tokenId} no encontrado para ${fromOwner}`);
@@ -316,6 +361,19 @@ export class SimpleContract extends Contract {
             console.log(`🔄 Transferencia parcial: reduciendo de ${productAmount} a ${productAmount - transferAmount}`);
             product.amount = productAmount - transferAmount;
             product.updatedAt = updatedAt;
+            
+            // Agregar registro de transferencia al historial del producto original
+            product.transferHistory = product.transferHistory || [];
+            product.transferHistory.push({
+                from: fromOwner,
+                to: toOwner,
+                amount: amount,
+                transferType: transferType,
+                timestamp: updatedAt,
+                notes: notes,
+                deliveryTimeHours: deliveryTimeHours
+            });
+            
             await ctx.stub.putState(fromKey, Buffer.from(JSON.stringify(product)));
         }
 
@@ -352,7 +410,8 @@ export class SimpleContract extends Contract {
             amount: amount,
             transferType: transferType,
             timestamp: updatedAt,
-            notes: notes
+            notes: notes,
+            deliveryTimeHours: deliveryTimeHours
         });
 
         // Guardar producto transferido
@@ -377,7 +436,8 @@ export class SimpleContract extends Contract {
             amount,
             transferType,
             timestamp: updatedAt,
-            notes
+            notes,
+            deliveryTimeHours
         };
         await ctx.stub.putState(transferKey, Buffer.from(JSON.stringify(transferRecord)));
 
@@ -397,6 +457,9 @@ export class SimpleContract extends Contract {
             throw new Error('Dirección del propietario requerida');
         }
 
+        // Normalizar la dirección a minúsculas para búsqueda consistente
+        const normalizedOwner = ownerAddress.toLowerCase();
+
         const iterator = await ctx.stub.getStateByRange('transfer:', 'transfer:~');
         const transfers = [];
 
@@ -405,8 +468,8 @@ export class SimpleContract extends Contract {
             if (result.value && result.value.value.toString()) {
                 try {
                     const transfer = JSON.parse(result.value.value.toString());
-                    // Filtrar transferencias donde este propietario es el remitente
-                    if (transfer.from === ownerAddress) {
+                    // Filtrar transferencias donde este propietario es el remitente (case-insensitive)
+                    if (transfer.from.toLowerCase() === normalizedOwner) {
                         transfers.push(transfer);
                     }
                 } catch (error) {

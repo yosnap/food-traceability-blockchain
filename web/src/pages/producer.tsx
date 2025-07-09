@@ -350,7 +350,7 @@ export default function ProducerDashboard() {
       }
     } catch (error: any) {
       console.error('❌ Error actualizando producto:', error);
-      toast.error('Error al actualizar producto');
+      toast.error('Error al retirar producto');
     } finally {
       setIsUpdating(false);
     }
@@ -435,13 +435,6 @@ export default function ProducerDashboard() {
                   onMarkAllAsRead={markAllAsRead}
                 />
                 
-                <button
-                  onClick={loadDashboardData}
-                  disabled={isLoading}
-                  className="btn-secondary"
-                >
-                  {isLoading ? 'Actualizando...' : 'Actualizar'}
-                </button>
                 
                 <Link href="/profile" className="btn-secondary">
                   Mi Perfil
@@ -658,7 +651,7 @@ export default function ProducerDashboard() {
                               className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm flex items-center space-x-1"
                             >
                               <PencilIcon className="w-3 h-3" />
-                              <span>Editar</span>
+                              <span>Actualizar</span>
                             </button>
                             
                             <button
@@ -666,7 +659,7 @@ export default function ProducerDashboard() {
                               className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm flex items-center space-x-1"
                             >
                               <TrashIcon className="w-3 h-3" />
-                              <span>Actualizar</span>
+                              <span>Retirar</span>
                             </button>
                             
                             {/* Botón de transferir con restricciones de caducidad */}
@@ -765,7 +758,7 @@ export default function ProducerDashboard() {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="mb-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Editar Producto</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Actualizar Producto</h3>
               <p className="text-sm text-gray-600">Actualiza la información del producto</p>
             </div>
             
@@ -871,9 +864,9 @@ export default function ProducerDashboard() {
                 <TrashIcon className="w-8 h-8 text-red-600" />
               </div>
               
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Actualizar Producto</h3>
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">Retirar Producto</h3>
               <p className="text-sm text-gray-600 mb-6">
-                ¿Estás seguro que deseas actualizar "{selectedProduct.name}"? 
+                ¿Estás seguro que deseas retirar "{selectedProduct.name}"? 
                 Esta acción marcará el producto como inactivo pero mantendrá el historial en el blockchain.
               </p>
               
@@ -893,7 +886,7 @@ export default function ProducerDashboard() {
                   className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md"
                   disabled={isUpdating}
                 >
-                  {isUpdating ? 'Actualizando...' : 'Actualizar'}
+                  {isUpdating ? 'Retirando...' : 'Retirar'}
                 </button>
               </div>
             </div>

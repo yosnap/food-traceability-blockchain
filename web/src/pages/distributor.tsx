@@ -29,6 +29,44 @@ import { useNotifications } from '@/hooks/useNotifications';
 import { calculateExpirationInfo } from '@/utils/expirationUtils';
 import Breadcrumb from '@/components/Breadcrumb';
 
+// Función para calcular si un producto ha sido entregado (tiempo personalizable)
+function calculateDeliveryStatus(transferHistory: any[]): { status: 'pending' | 'in_transit' | 'delivered', timeInfo: string } {
+  if (!transferHistory || transferHistory.length === 0) {
+    return { status: 'pending', timeInfo: 'Sin transferencias' };
+  }
+  
+  const lastTransfer = transferHistory[transferHistory.length - 1];
+  const transferTime = new Date(lastTransfer.timestamp);
+  const now = new Date();
+  const hoursSinceTransfer = (now.getTime() - transferTime.getTime()) / (1000 * 60 * 60);
+  
+  // Usar tiempo de entrega personalizado o 0 horas por defecto (inmediata)
+  const deliveryTimeHours = lastTransfer.deliveryTimeHours !== undefined ? lastTransfer.deliveryTimeHours : 0;
+  
+  // Si el tiempo de entrega es 0 (inmediata), marcar como entregado inmediatamente
+  if (deliveryTimeHours === 0) {
+    return { 
+      status: 'delivered', 
+      timeInfo: `Entregado inmediatamente` 
+    };
+  }
+  
+  if (hoursSinceTransfer < deliveryTimeHours) {
+    const remainingHours = deliveryTimeHours - hoursSinceTransfer;
+    const remainingMinutes = Math.floor((remainingHours % 1) * 60);
+    const hours = Math.floor(remainingHours);
+    return { 
+      status: 'in_transit', 
+      timeInfo: `${hours}h ${remainingMinutes}m para entrega` 
+    };
+  } else {
+    return { 
+      status: 'delivered', 
+      timeInfo: `Entregado hace ${Math.floor(hoursSinceTransfer - deliveryTimeHours)}h` 
+    };
+  }
+}
+
 interface DistributorStats {
   totalShipments: number;
   inTransit: number;
@@ -58,6 +96,7 @@ export default function DistributorDashboard() {
 
   useEffect(() => {
     let timeoutId: NodeJS.Timeout | null = null;
+    let intervalId: NodeJS.Timeout | null = null;
     let mounted = true;
     
     // Simplified auth check
@@ -104,10 +143,20 @@ export default function DistributorDashboard() {
       }
     }, 100);
     
+    // Auto-refresh every minute to update delivery statuses
+    intervalId = setInterval(() => {
+      if (mounted) {
+        loadDashboardData();
+      }
+    }, 60000); // 60 seconds
+    
     return () => {
       mounted = false;
       if (timeoutId) {
         clearTimeout(timeoutId);
+      }
+      if (intervalId) {
+        clearInterval(intervalId);
       }
     };
   }, []);
@@ -118,40 +167,51 @@ export default function DistributorDashboard() {
       console.log('🔄 Cargando datos del dashboard de distribuidor...');
       
       // Importar funciones de API para cargar productos reales
-      const { getMyProducts } = await import('@/utils/api');
+      const { getMyProducts, getMyTransfers } = await import('@/utils/api');
       
       // Cargar productos del usuario autenticado
       const productsResponse = await getMyProducts();
+      
+      // Cargar transferencias del usuario autenticado
+      const transfersResponse = await getMyTransfers();
       
       if (productsResponse.success && productsResponse.data) {
         console.log('✅ Productos cargados:', productsResponse.data);
         
         // Convertir FoodAsset[] a Product[] para compatibilidad con la UI
-        const convertedProducts = productsResponse.data.map((foodAsset: any) => ({
-          id: foodAsset.id,
-          name: foodAsset.name,
-          batchNumber: foodAsset.batchNumber || foodAsset.attributes?.batchNumber,
-          productionDate: foodAsset.productionDate || foodAsset.attributes?.productionDate,
-          expirationDate: foodAsset.expirationDate || foodAsset.attributes?.expirationDate,
-          status: foodAsset.status || ProductStatus.ACTIVE,
-          currentLocation: foodAsset.origin?.farmName || foodAsset.attributes?.origin?.farmName || 'Centro de Distribución',
-          temperature: foodAsset.storageConditions?.temperature || foodAsset.attributes?.storageConditions?.temperature || 4,
-          humidity: foodAsset.storageConditions?.humidity || foodAsset.attributes?.storageConditions?.humidity || 75,
-          producer: {
-            id: 'current-distributor',
-            name: foodAsset.origin?.farmName || foodAsset.attributes?.origin?.farmName || 'Logística Valle Central',
-            location: foodAsset.origin?.location || foodAsset.attributes?.origin?.location || 'Centro de Distribución Principal'
-          },
-          metadata: {
-            variety: foodAsset.variety || foodAsset.attributes?.variety || 'Mixto',
-            weight: foodAsset.weight ? `${foodAsset.weight}kg` : (foodAsset.attributes?.weight ? `${foodAsset.attributes.weight}kg` : 'Sin especificar'),
-            certification: foodAsset.certifications?.join(', ') || foodAsset.attributes?.certifications?.join(', ') || 'Cadena de Frío',
-            harvestDate: foodAsset.productionDate || foodAsset.attributes?.productionDate,
-            description: foodAsset.description || foodAsset.attributes?.description || 'Producto en distribución',
-            brand: foodAsset.brand || foodAsset.attributes?.brand || 'Valle Central',
-            category: foodAsset.category || foodAsset.attributes?.category || 'DISTRIBUTION'
-          }
-        }));
+        const convertedProducts = productsResponse.data.map((foodAsset: any) => {
+          const deliveryStatus = calculateDeliveryStatus(foodAsset.transferHistory);
+          
+          return {
+            id: foodAsset.id,
+            name: foodAsset.name,
+            batchNumber: foodAsset.batchNumber || foodAsset.attributes?.batchNumber,
+            productionDate: foodAsset.productionDate || foodAsset.attributes?.productionDate,
+            expirationDate: foodAsset.expirationDate || foodAsset.attributes?.expirationDate,
+            status: deliveryStatus.status === 'delivered' ? ProductStatus.CONSUMED : 
+                   deliveryStatus.status === 'in_transit' ? ProductStatus.IN_TRANSIT : 
+                   ProductStatus.ACTIVE,
+            currentLocation: foodAsset.origin?.farmName || foodAsset.attributes?.origin?.farmName || 'Centro de Distribución',
+            temperature: foodAsset.storageConditions?.temperature || foodAsset.attributes?.storageConditions?.temperature || 4,
+            humidity: foodAsset.storageConditions?.humidity || foodAsset.attributes?.storageConditions?.humidity || 75,
+            quantity: foodAsset.amount || 1, // Mapear el campo amount del blockchain como quantity
+            producer: {
+              id: 'current-distributor',
+              name: foodAsset.origin?.farmName || foodAsset.attributes?.origin?.farmName || 'Logística Valle Central',
+              location: foodAsset.origin?.location || foodAsset.attributes?.origin?.location || 'Centro de Distribución Principal'
+            },
+            metadata: {
+              variety: foodAsset.variety || foodAsset.attributes?.variety || 'Mixto',
+              weight: foodAsset.weight ? `${foodAsset.weight}kg` : (foodAsset.attributes?.weight ? `${foodAsset.attributes.weight}kg` : 'Sin especificar'),
+              certification: foodAsset.certifications?.join(', ') || foodAsset.attributes?.certifications?.join(', ') || 'Cadena de Frío',
+              harvestDate: foodAsset.productionDate || foodAsset.attributes?.productionDate,
+              description: foodAsset.description || foodAsset.attributes?.description || 'Producto en distribución',
+              brand: foodAsset.brand || foodAsset.attributes?.brand || 'Valle Central',
+              category: foodAsset.category || foodAsset.attributes?.category || 'DISTRIBUTION',
+              deliveryInfo: deliveryStatus.timeInfo // Información de entrega
+            }
+          };
+        });
         
         // Ensure unique products by ID to avoid duplicate keys
         const uniqueProducts = convertedProducts.filter((product, index, array) => 
@@ -159,7 +219,13 @@ export default function DistributorDashboard() {
         );
         setProducts(uniqueProducts);
         
-        // Calcular estadísticas básicas
+        // Calcular transferencias reales desde el blockchain
+        let actualTransfers = 0;
+        if (transfersResponse.success && transfersResponse.data) {
+          actualTransfers = transfersResponse.data.length;
+        }
+        
+        // Calcular estadísticas básicas con los nuevos estados
         const totalShipments = uniqueProducts.length;
         const inTransit = uniqueProducts.filter(p => p.status === ProductStatus.IN_TRANSIT).length;
         const delivered = uniqueProducts.filter(p => p.status === ProductStatus.CONSUMED).length;
@@ -197,9 +263,11 @@ export default function DistributorDashboard() {
   const getStatusColor = (status: ProductStatus) => {
     switch (status) {
       case ProductStatus.ACTIVE:
-        return 'bg-green-100 text-green-800';
+        return 'bg-yellow-100 text-yellow-800';
       case ProductStatus.IN_TRANSIT:
         return 'bg-blue-100 text-blue-800';
+      case ProductStatus.CONSUMED:
+        return 'bg-green-100 text-green-800';
       case ProductStatus.EXPIRED:
         return 'bg-red-100 text-red-800';
       case ProductStatus.RECALLED:
@@ -212,9 +280,11 @@ export default function DistributorDashboard() {
   const getStatusIcon = (status: ProductStatus) => {
     switch (status) {
       case ProductStatus.ACTIVE:
-        return <CheckCircleIcon className="w-4 h-4" />;
+        return <ClockIcon className="w-4 h-4" />;
       case ProductStatus.IN_TRANSIT:
         return <TruckIcon className="w-4 h-4" />;
+      case ProductStatus.CONSUMED:
+        return <CheckCircleIcon className="w-4 h-4" />;
       case ProductStatus.EXPIRED:
         return <ExclamationTriangleIcon className="w-4 h-4" />;
       case ProductStatus.RECALLED:
@@ -241,7 +311,6 @@ export default function DistributorDashboard() {
     setSelectedProduct(null);
     
     // Recargar productos del blockchain para obtener el estado actualizado
-    toast('Actualizando productos...', { icon: '🔄' });
     await loadDashboardData();
   };
 
@@ -477,7 +546,13 @@ export default function DistributorDashboard() {
                             <h4 className="text-lg font-medium text-gray-900">{product.name}</h4>
                             <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(product.status)}`}>
                               {getStatusIcon(product.status)}
-                              <span className="ml-1">{product.status}</span>
+                              <span className="ml-1">
+                                {product.status === ProductStatus.ACTIVE && 'Disponible'}
+                                {product.status === ProductStatus.IN_TRANSIT && 'En Tránsito'}
+                                {product.status === ProductStatus.CONSUMED && 'Entregado'}
+                                {product.status === ProductStatus.EXPIRED && 'Vencido'}
+                                {product.status === ProductStatus.RECALLED && 'Retirado'}
+                              </span>
                             </span>
                             
                             {expirationInfo.urgencyLevel !== 'normal' && (
@@ -510,7 +585,8 @@ export default function DistributorDashboard() {
                             <span className="mr-4">Peso: {product.metadata.weight}</span>
                             <span className="mr-4">Temp: {product.temperature}°C</span>
                             <span className="mr-4">Humedad: {product.humidity}%</span>
-                            <span>Certificación: {product.metadata.certification}</span>
+                            <span className="mr-4">Certificación: {product.metadata.certification}</span>
+                            <span className="font-medium text-blue-600">{product.metadata.deliveryInfo}</span>
                           </div>
                         </div>
 
@@ -520,13 +596,16 @@ export default function DistributorDashboard() {
                           </button>
                           <button 
                             onClick={() => handleTransferClick(product)}
-                            disabled={!expirationInfo.canTransfer}
+                            disabled={!expirationInfo.canTransfer || product.status !== ProductStatus.ACTIVE}
                             className={`px-3 py-1 rounded text-sm transition-colors ${
-                              expirationInfo.canTransfer
+                              expirationInfo.canTransfer && product.status === ProductStatus.ACTIVE
                                 ? 'bg-blue-600 hover:bg-blue-700 text-white'
                                 : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                             }`}
-                            title={!expirationInfo.canTransfer ? 'No se puede transferir producto vencido' : ''}
+                            title={
+                              !expirationInfo.canTransfer ? 'No se puede transferir producto vencido' :
+                              product.status !== ProductStatus.ACTIVE ? 'Solo se pueden transferir productos disponibles' : ''
+                            }
                           >
                             Distribuir
                           </button>

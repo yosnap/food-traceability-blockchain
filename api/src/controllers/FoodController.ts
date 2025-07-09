@@ -237,7 +237,8 @@ export class FoodController {
             const result = await fabricGatewayService.transferFoodAsset(
                 currentOwnerUserId,
                 currentOwnerRole,
-                transferData
+                transferData,
+                authenticatedUser?.address // Pasar la dirección real del usuario de MetaMask
             );
 
             res.json({
@@ -310,14 +311,14 @@ export class FoodController {
 
             console.log('🔧 Autenticado como:', authenticatedUser.name || 'Usuario', `(${authenticatedUser.role || 'sin rol'})`);
             
-            // Obtener TODOS los productos del sistema (sin filtrar por usuario)
-            console.log('🔍 Obteniendo todos los productos del sistema...');
-            const allProducts = await fabricGatewayService.getAllProducts();
+            // Obtener productos específicos del usuario usando su dirección de wallet
+            console.log('🔍 Obteniendo productos del usuario:', authenticatedUser.address);
+            const userProducts = await fabricGatewayService.getProductsByOwner(authenticatedUser.address);
 
             res.json({
                 success: true,
                 message: 'Productos obtenidos exitosamente',
-                data: allProducts,
+                data: userProducts,
                 owner: {
                     userId: authenticatedUser.fabricUserId || authenticatedUser.userId,
                     name: authenticatedUser.name,

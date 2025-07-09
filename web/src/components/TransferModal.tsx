@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { XMarkIcon, ArrowRightIcon } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
 import { Product, UserRole, TransferType } from '@/types';
-import { transferProduct, getTransferRecipients } from '@/utils/api';
+import { transferProduct } from '@/utils/api';
 import { MockUser } from '@/data/mockUsers';
 
 interface TransferModalProps {
@@ -35,55 +35,18 @@ export default function TransferModal({ isOpen, onClose, product, fromRole, onTr
   const [selectedRole, setSelectedRole] = useState<UserRole | ''>('');
   const [selectedRecipient, setSelectedRecipient] = useState<MockUser | null>(null);
   const [notes, setNotes] = useState('');
+  const [deliveryTime, setDeliveryTime] = useState('0'); // Tiempo de entrega en horas (0 = inmediata)
   const [isLoading, setIsLoading] = useState(false);
-  const [availableRecipients, setAvailableRecipients] = useState<MockUser[]>([]);
-  const [allRecipients, setAllRecipients] = useState<Record<string, MockUser[]>>({});
-  const [isLoadingRecipients, setIsLoadingRecipients] = useState(false);
 
-  // Load available recipients from API
+  // Reset form when modal opens
   useEffect(() => {
-    const loadRecipients = async () => {
-      setIsLoadingRecipients(true);
-      try {
-        const response = await getTransferRecipients();
-        console.log('🔍 API response:', response);
-        if (response.success) {
-          console.log('🔍 Recipients data:', response.data);
-          setAllRecipients(response.data);
-        } else {
-          console.error('Error loading recipients:', response.message);
-          toast.error('Error cargando destinatarios disponibles');
-        }
-      } catch (error: any) {
-        console.error('Error loading recipients:', error);
-        toast.error('Error cargando destinatarios');
-      } finally {
-        setIsLoadingRecipients(false);
-      }
-    };
-
     if (isOpen) {
-      loadRecipients();
+      setSelectedRole('');
+      setSelectedRecipient(null);
+      setNotes('');
+      setDeliveryTime('0');
     }
   }, [isOpen]);
-
-  useEffect(() => {
-    if (selectedRole && allRecipients) {
-      // Convertir selectedRole a mayúsculas para que coincida con las claves de la API
-      const roleKey = selectedRole.toString().toUpperCase();
-      const recipients = allRecipients[roleKey] || [];
-      console.log('🔍 TransferModal recipients mapping:', {
-        selectedRole,
-        roleKey,
-        availableKeys: Object.keys(allRecipients),
-        recipientsCount: recipients.length,
-        recipients: recipients.map(r => r.name)
-      });
-      setAvailableRecipients(recipients);
-    } else {
-      setAvailableRecipients([]);
-    }
-  }, [selectedRole, allRecipients]);
 
   if (!isOpen || !product) return null;
 
@@ -109,10 +72,12 @@ export default function TransferModal({ isOpen, onClose, product, fromRole, onTr
         },
         quantity: product.quantity || 1,
         conditions: `Transferencia de ${roleNames[fromRole]} a ${roleNames[selectedRole as UserRole]}`,
-        notes: notes || `Transferido a ${selectedRecipient.name}`
+        notes: notes || `Transferido a ${selectedRecipient.name}`,
+        deliveryTime: parseInt(deliveryTime) || 0 // Tiempo de entrega en horas (0 = inmediata)
       };
 
       console.log('🔄 Enviando transferencia a la API:', transferData);
+      console.log('🔍 Cantidad del producto:', product.quantity, 'Metadata weight:', product.metadata.weight);
       
       // Llamar a la API real
       const response = await transferProduct(product.id, transferData);
@@ -125,6 +90,7 @@ export default function TransferModal({ isOpen, onClose, product, fromRole, onTr
         setSelectedRole('');
         setSelectedRecipient(null);
         setNotes('');
+        setDeliveryTime('0');
         onClose();
       } else {
         throw new Error(response.message || 'Error en la transferencia');
@@ -163,7 +129,7 @@ export default function TransferModal({ isOpen, onClose, product, fromRole, onTr
                 <span className="font-medium">Lote:</span> {product.batchNumber}
               </div>
               <div>
-                <span className="font-medium">Cantidad:</span> {product.metadata.weight}
+                <span className="font-medium">Cantidad:</span> {product.quantity} unidades
               </div>
               <div>
                 <span className="font-medium">Ubicación actual:</span> {product.currentLocation}
@@ -213,41 +179,66 @@ export default function TransferModal({ isOpen, onClose, product, fromRole, onTr
           {selectedRole && (
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Seleccionar destinatario:
+                Dirección del destinatario ({roleNames[selectedRole as UserRole]}):
               </label>
-              {isLoadingRecipients ? (
-                <div className="p-4 text-center text-gray-500">
-                  <div className="animate-spin w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full mx-auto mb-2"></div>
-                  Cargando destinatarios...
-                </div>
-              ) : availableRecipients.length === 0 ? (
-                <div className="p-4 text-center text-gray-500">
-                  No hay destinatarios disponibles para {roleNames[selectedRole as UserRole]}
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {availableRecipients.map(recipient => (
-                  <div
-                    key={recipient.id}
-                    onClick={() => setSelectedRecipient(recipient)}
-                    className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                      selectedRecipient?.id === recipient.id
-                        ? 'border-blue-500 bg-blue-50'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    <div className="font-medium text-gray-900">{recipient.name}</div>
-                    <div className="text-sm text-gray-600">{recipient.location}</div>
-                    <div className="text-xs text-gray-500">{recipient.organization}</div>
-                    <div className="text-xs text-gray-400 mt-1">
-                      <span className="font-mono">{recipient.walletAddress.slice(0, 6)}...{recipient.walletAddress.slice(-4)}</span>
-                    </div>
-                  </div>
-                  ))}
+              <input
+                type="text"
+                value={selectedRecipient?.walletAddress || ''}
+                onChange={(e) => {
+                  const address = e.target.value;
+                  setSelectedRecipient(address ? {
+                    id: address,
+                    walletAddress: address,
+                    name: `${roleNames[selectedRole as UserRole]} (${address.slice(0, 6)}...${address.slice(-4)})`,
+                    role: selectedRole as string,
+                    organization: `${roleNames[selectedRole as UserRole]} MetaMask`,
+                    location: 'Dirección personalizada',
+                    email: '',
+                    phone: '',
+                    certificateId: '',
+                    isActive: true
+                  } : null);
+                }}
+                placeholder="0x1234567890123456789012345678901234567890"
+                className="w-full p-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500 font-mono text-sm"
+              />
+              {selectedRecipient && (
+                <div className="mt-2 p-3 bg-gray-50 rounded-md">
+                  <div className="font-medium text-gray-900">{selectedRecipient.name}</div>
+                  <div className="text-sm text-gray-600">{selectedRecipient.location}</div>
+                  <div className="text-xs text-gray-500">{selectedRecipient.organization}</div>
                 </div>
               )}
             </div>
           )}
+
+          {/* Delivery Time */}
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Tiempo estimado de entrega:
+            </label>
+            <select
+              value={deliveryTime}
+              onChange={(e) => setDeliveryTime(e.target.value)}
+              className="w-full p-3 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="0">Inmediata</option>
+              <option value="1">1 hora</option>
+              <option value="2">2 horas</option>
+              <option value="3">3 horas</option>
+              <option value="4">4 horas (estándar)</option>
+              <option value="6">6 horas</option>
+              <option value="8">8 horas</option>
+              <option value="12">12 horas</option>
+              <option value="24">24 horas</option>
+            </select>
+            <p className="mt-1 text-sm text-gray-500">
+              {deliveryTime === '0' 
+                ? 'El producto se marcará como "Entregado" inmediatamente' 
+                : 'El producto cambiará automáticamente a "Entregado" después de este tiempo'
+              }
+            </p>
+          </div>
 
           {/* Notes */}
           <div className="mb-6">

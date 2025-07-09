@@ -18,34 +18,76 @@ import {
   BeakerIcon,
   QrCodeIcon,
   PencilIcon,
-  TrashIcon
+  TrashIcon,
+  TruckIcon
 } from '@heroicons/react/24/outline';
 import { useAuth } from '@/hooks/useAuth';
 import { Product, ProductStatus, UserRole } from '@/types';
 import SafeDate from '@/components/SafeDate';
 import TransferModal from '@/components/TransferModal';
+import ProductDetailsModal from '@/components/ProductDetailsModal';
 import NotificationBell from '@/components/NotificationBell';
 import { useNotifications } from '@/hooks/useNotifications';
 import { calculateExpirationInfo } from '@/utils/expirationUtils';
 import Breadcrumb from '@/components/Breadcrumb';
 
+// Función para calcular el estado de entrega basado en el tiempo
+function calculateDeliveryStatus(transferHistory: any[]): { status: 'pending' | 'in_transit' | 'delivered', timeInfo: string } {
+  if (!transferHistory || transferHistory.length === 0) {
+    return { status: 'pending', timeInfo: 'Sin transferencias' };
+  }
+  
+  const lastTransfer = transferHistory[transferHistory.length - 1];
+  const transferTime = new Date(lastTransfer.timestamp);
+  const now = new Date();
+  const hoursSinceTransfer = (now.getTime() - transferTime.getTime()) / (1000 * 60 * 60);
+  
+  // Usar tiempo de entrega personalizado o 0 horas por defecto (inmediata)
+  const deliveryTimeHours = lastTransfer.deliveryTimeHours !== undefined ? lastTransfer.deliveryTimeHours : 0;
+  
+  // Si el tiempo de entrega es 0 (inmediata), marcar como entregado inmediatamente
+  if (deliveryTimeHours === 0) {
+    return { 
+      status: 'delivered', 
+      timeInfo: `Entregado inmediatamente` 
+    };
+  }
+  
+  if (hoursSinceTransfer < deliveryTimeHours) {
+    const remainingHours = deliveryTimeHours - hoursSinceTransfer;
+    const remainingMinutes = Math.floor((remainingHours % 1) * 60);
+    const hours = Math.floor(remainingHours);
+    return { 
+      status: 'in_transit', 
+      timeInfo: `${hours}h ${remainingMinutes}m para entrega` 
+    };
+  } else {
+    return { 
+      status: 'delivered', 
+      timeInfo: `Entregado hace ${Math.floor(hoursSinceTransfer - deliveryTimeHours)}h` 
+    };
+  }
+}
+
 interface ProcessorStats {
   totalBatches: number;
   activeProcessing: number;
   readyProducts: number;
+  sent: number;
   rawMaterials: number;
 }
 
 export default function ProcessorDashboard() {
   const router = useRouter();
   const { user, isAuthenticated } = useAuth();
-  const [stats, setStats] = useState<ProcessorStats>({ totalBatches: 0, activeProcessing: 0, readyProducts: 0, rawMaterials: 0 });
+  const [stats, setStats] = useState<ProcessorStats>({ totalBatches: 0, activeProcessing: 0, readyProducts: 0, sent: 0, rawMaterials: 0 });
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [showTransferModal, setShowTransferModal] = useState(false);
+  const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   
   // Hook de notificaciones
@@ -58,6 +100,7 @@ export default function ProcessorDashboard() {
 
   useEffect(() => {
     let timeoutId: NodeJS.Timeout | null = null;
+    let intervalId: NodeJS.Timeout | null = null;
     let mounted = true;
     
     // Simplified auth check
@@ -104,10 +147,20 @@ export default function ProcessorDashboard() {
       }
     }, 100);
     
+    // Auto-refresh every minute to update delivery statuses
+    intervalId = setInterval(() => {
+      if (mounted) {
+        loadDashboardData();
+      }
+    }, 60000); // 60 seconds
+    
     return () => {
       mounted = false;
       if (timeoutId) {
         clearTimeout(timeoutId);
+      }
+      if (intervalId) {
+        clearInterval(intervalId);
       }
     };
   }, []);
@@ -118,40 +171,51 @@ export default function ProcessorDashboard() {
       console.log('🔄 Cargando datos del dashboard de procesador...');
       
       // Importar funciones de API para cargar productos reales
-      const { getMyProducts } = await import('@/utils/api');
+      const { getMyProducts, getMyTransfers } = await import('@/utils/api');
       
       // Cargar productos del usuario autenticado
       const productsResponse = await getMyProducts();
+      
+      // Cargar transferencias del usuario autenticado
+      const transfersResponse = await getMyTransfers();
       
       if (productsResponse.success && productsResponse.data) {
         console.log('✅ Productos cargados:', productsResponse.data);
         
         // Convertir FoodAsset[] a Product[] para compatibilidad con la UI
-        const convertedProducts = productsResponse.data.map((foodAsset: any) => ({
-          id: foodAsset.id,
-          name: foodAsset.name,
-          batchNumber: foodAsset.batchNumber || foodAsset.attributes?.batchNumber,
-          productionDate: foodAsset.productionDate || foodAsset.attributes?.productionDate,
-          expirationDate: foodAsset.expirationDate || foodAsset.attributes?.expirationDate,
-          status: foodAsset.status || ProductStatus.ACTIVE,
-          currentLocation: foodAsset.origin?.farmName || foodAsset.attributes?.origin?.farmName || 'Planta de Procesamiento',
-          temperature: foodAsset.storageConditions?.temperature || foodAsset.attributes?.storageConditions?.temperature || 2,
-          humidity: foodAsset.storageConditions?.humidity || foodAsset.attributes?.storageConditions?.humidity || 80,
-          producer: {
-            id: 'current-processor',
-            name: foodAsset.origin?.farmName || foodAsset.attributes?.origin?.farmName || 'Procesadora Valle Verde',
-            location: foodAsset.origin?.location || foodAsset.attributes?.origin?.location || 'Zona Industrial, San José'
-          },
-          metadata: {
-            variety: foodAsset.variety || foodAsset.attributes?.variety || 'Procesado',
-            weight: foodAsset.weight ? `${foodAsset.weight}kg` : (foodAsset.attributes?.weight ? `${foodAsset.attributes.weight}kg` : 'Sin especificar'),
-            certification: foodAsset.certifications?.join(', ') || foodAsset.attributes?.certifications?.join(', ') || 'HACCP',
-            harvestDate: foodAsset.productionDate || foodAsset.attributes?.productionDate,
-            description: foodAsset.description || foodAsset.attributes?.description || 'Producto procesado',
-            brand: foodAsset.brand || foodAsset.attributes?.brand || 'Valle Verde',
-            category: foodAsset.category || foodAsset.attributes?.category || 'PROCESSED'
-          }
-        }));
+        const convertedProducts = productsResponse.data.map((foodAsset: any) => {
+          const deliveryStatus = calculateDeliveryStatus(foodAsset.transferHistory);
+          
+          return {
+            id: foodAsset.id,
+            name: foodAsset.name,
+            batchNumber: foodAsset.batchNumber || foodAsset.attributes?.batchNumber,
+            productionDate: foodAsset.productionDate || foodAsset.attributes?.productionDate,
+            expirationDate: foodAsset.expirationDate || foodAsset.attributes?.expirationDate,
+            status: deliveryStatus.status === 'delivered' ? ProductStatus.CONSUMED : 
+                   deliveryStatus.status === 'in_transit' ? ProductStatus.IN_TRANSIT : 
+                   ProductStatus.ACTIVE,
+            currentLocation: foodAsset.origin?.farmName || foodAsset.attributes?.origin?.farmName || 'Planta de Procesamiento',
+            temperature: foodAsset.storageConditions?.temperature || foodAsset.attributes?.storageConditions?.temperature || 2,
+            humidity: foodAsset.storageConditions?.humidity || foodAsset.attributes?.storageConditions?.humidity || 80,
+            quantity: foodAsset.amount || 1, // Mapear el campo amount del blockchain como quantity
+            producer: {
+              id: 'current-processor',
+              name: foodAsset.origin?.farmName || foodAsset.attributes?.origin?.farmName || 'Procesadora Valle Verde',
+              location: foodAsset.origin?.location || foodAsset.attributes?.origin?.location || 'Zona Industrial, San José'
+            },
+            metadata: {
+              variety: foodAsset.variety || foodAsset.attributes?.variety || 'Procesado',
+              weight: foodAsset.weight ? `${foodAsset.weight}kg` : (foodAsset.attributes?.weight ? `${foodAsset.attributes.weight}kg` : 'Sin especificar'),
+              certification: foodAsset.certifications?.join(', ') || foodAsset.attributes?.certifications?.join(', ') || 'HACCP',
+              harvestDate: foodAsset.productionDate || foodAsset.attributes?.productionDate,
+              description: foodAsset.description || foodAsset.attributes?.description || 'Producto procesado',
+              brand: foodAsset.brand || foodAsset.attributes?.brand || 'Valle Verde',
+              category: foodAsset.category || foodAsset.attributes?.category || 'PROCESSED',
+              deliveryInfo: deliveryStatus.timeInfo // Información de entrega
+            }
+          };
+        });
         
         // Ensure unique products by ID to avoid duplicate keys
         const uniqueProducts = convertedProducts.filter((product, index, array) => 
@@ -159,17 +223,24 @@ export default function ProcessorDashboard() {
         );
         setProducts(uniqueProducts);
         
-        // Calcular estadísticas básicas
+        // Calcular estadísticas básicas con nueva terminología
         const totalBatches = uniqueProducts.length;
-        const activeProcessing = uniqueProducts.filter(p => p.status === ProductStatus.ACTIVE).length;
-        const readyProducts = uniqueProducts.filter(p => p.status === ProductStatus.IN_TRANSIT).length;
-        const rawMaterials = Math.floor(totalBatches * 1.5); // Estimación
+        const inProcess = uniqueProducts.filter(p => p.status === ProductStatus.ACTIVE).length;
+        const readyProducts = 0; // Por ahora no tenemos estado "listo para envío"
+        const sent = uniqueProducts.filter(p => p.status === ProductStatus.IN_TRANSIT).length;
+        
+        // Calcular transferencias reales desde el blockchain (productos entregados)
+        let transferred = 0;
+        if (transfersResponse.success && transfersResponse.data) {
+          transferred = transfersResponse.data.length;
+        }
         
         setStats({
           totalBatches,
-          activeProcessing,
+          activeProcessing: inProcess,
           readyProducts,
-          rawMaterials
+          sent,
+          rawMaterials: transferred
         });
         
         toast.success(`Dashboard actualizado - ${totalBatches} lotes procesados cargados`, { id: 'dashboard-load' });
@@ -229,20 +300,17 @@ export default function ProcessorDashboard() {
     setShowTransferModal(true);
   };
 
-  const handleTransferComplete = async (product: Product, toRole: UserRole, recipient: any) => {
-    // Update stats
-    setStats(prevStats => ({
-      ...prevStats,
-      activeProcessing: prevStats.activeProcessing - 1,
-      readyProducts: prevStats.readyProducts + 1
-    }));
+  const handleDetailsClick = (product: Product) => {
+    setSelectedProduct(product);
+    setShowDetailsModal(true);
+  };
 
+  const handleTransferComplete = async (product: Product, toRole: UserRole, recipient: any) => {
     toast.success(`Producto procesado "${product.name}" transferido exitosamente a ${recipient.name}`, { id: 'transfer-success' });
     setShowTransferModal(false);
     setSelectedProduct(null);
     
     // Recargar productos del blockchain para obtener el estado actualizado
-    toast('Actualizando productos...', { icon: '🔄' });
     await loadDashboardData();
   };
 
@@ -344,7 +412,7 @@ export default function ProcessorDashboard() {
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
               <div className="card">
                 <div className="flex items-center">
                   <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center">
@@ -363,7 +431,7 @@ export default function ProcessorDashboard() {
                     <CogIcon className="w-6 h-6 text-orange-600" />
                   </div>
                   <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">En Procesamiento</p>
+                    <p className="text-sm font-medium text-gray-600">En Proceso</p>
                     <p className="text-2xl font-semibold text-gray-900">{stats.activeProcessing}</p>
                   </div>
                 </div>
@@ -384,10 +452,22 @@ export default function ProcessorDashboard() {
               <div className="card">
                 <div className="flex items-center">
                   <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <DocumentTextIcon className="w-6 h-6 text-blue-600" />
+                    <TruckIcon className="w-6 h-6 text-blue-600" />
                   </div>
                   <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600">Materias Primas</p>
+                    <p className="text-sm font-medium text-gray-600">Enviados</p>
+                    <p className="text-2xl font-semibold text-gray-900">{stats.sent}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="card">
+                <div className="flex items-center">
+                  <div className="w-12 h-12 bg-emerald-100 rounded-lg flex items-center justify-center">
+                    <CheckCircleIcon className="w-6 h-6 text-emerald-600" />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">Transferidos</p>
                     <p className="text-2xl font-semibold text-gray-900">{stats.rawMaterials}</p>
                   </div>
                 </div>
@@ -396,7 +476,9 @@ export default function ProcessorDashboard() {
 
             {/* Actions Section */}
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 mb-8">
-              <div className="card hover:shadow-lg transition-shadow cursor-pointer">
+              <div 
+                onClick={() => toast('Función de procesamiento en desarrollo', { icon: '🚧' })}
+                className="card hover:shadow-lg transition-shadow cursor-pointer">
                 <div className="text-center">
                   <div className="w-16 h-16 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-4">
                     <BeakerIcon className="w-8 h-8 text-blue-600" />
@@ -478,7 +560,13 @@ export default function ProcessorDashboard() {
                             <h4 className="text-lg font-medium text-gray-900">{product.name}</h4>
                             <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(product.status)}`}>
                               {getStatusIcon(product.status)}
-                              <span className="ml-1">{product.status}</span>
+                              <span className="ml-1">
+                                {product.status === ProductStatus.ACTIVE && 'En Proceso'}
+                                {product.status === ProductStatus.IN_TRANSIT && 'Enviados'}
+                                {product.status === ProductStatus.CONSUMED && 'Transferidos'}
+                                {product.status === ProductStatus.EXPIRED && 'Vencido'}
+                                {product.status === ProductStatus.RECALLED && 'Retirado'}
+                              </span>
                             </span>
                             
                             {expirationInfo.urgencyLevel !== 'normal' && (
@@ -511,12 +599,15 @@ export default function ProcessorDashboard() {
                             <span className="mr-4">Peso: {product.metadata.weight}</span>
                             <span className="mr-4">Temp: {product.temperature}°C</span>
                             <span className="mr-4">Humedad: {product.humidity}%</span>
-                            <span>Certificación: {product.metadata.certification}</span>
+                            <span className="mr-4">Certificación: {product.metadata.certification}</span>
+                            <span className="font-medium text-blue-600">{product.metadata.deliveryInfo}</span>
                           </div>
                         </div>
 
                         <div className="flex items-center space-x-2">
-                          <button className="btn-secondary text-sm">
+                          <button 
+                            onClick={() => handleDetailsClick(product)}
+                            className="btn-secondary text-sm">
                             Ver Detalles
                           </button>
                           <button 
@@ -545,7 +636,9 @@ export default function ProcessorDashboard() {
                   <p className="text-gray-600 mb-4">
                     {searchTerm ? 'No se encontraron productos con ese término' : 'Aún no has procesado ningún producto'}
                   </p>
-                  <button className="btn-primary">
+                  <button 
+                    onClick={() => toast('Función de procesamiento en desarrollo', { icon: '🚧' })}
+                    className="btn-primary">
                     Iniciar Procesamiento
                   </button>
                 </div>
@@ -562,6 +655,13 @@ export default function ProcessorDashboard() {
         product={selectedProduct}
         fromRole={UserRole.PROCESSOR}
         onTransferComplete={handleTransferComplete}
+      />
+
+      {/* Product Details Modal */}
+      <ProductDetailsModal
+        isOpen={showDetailsModal}
+        onClose={() => setShowDetailsModal(false)}
+        product={selectedProduct}
       />
     </>
   );

@@ -553,6 +553,7 @@ export class FabricGatewayService {
             price?: number;
             conditions?: string;
             notes?: string;
+            deliveryTime?: number;
         },
         currentOwnerAddress?: string // Parámetro opcional para dirección real
     ): Promise<string> {
@@ -573,7 +574,8 @@ export class FabricGatewayService {
             transferData.newOwner,                   // toOwner  
             transferData.quantity?.toString() || '1', // amount
             transferData.transferType,               // transferType
-            transferData.notes || ''                 // notes
+            transferData.notes || '',                // notes
+            transferData.deliveryTime !== undefined ? transferData.deliveryTime.toString() : '0' // deliveryTimeHours (0 = inmediata)
         );
     }
 
