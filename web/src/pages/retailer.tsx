@@ -350,6 +350,73 @@ export default function RetailerDashboard() {
     setShowDetailsModal(true);
   };
 
+  const handleGenerateQR = async (product: Product) => {
+    try {
+      // Generar URL del QR con información del producto
+      const qrData = {
+        productId: product.id,
+        productName: product.name,
+        batchNumber: product.batchNumber,
+        retailerId: currentUser?.address || currentUser?.id,
+        retailerName: currentUser?.name || 'Retailer',
+        timestamp: new Date().toISOString(),
+        // Datos para trazabilidad
+        traceability: {
+          producer: product.producer,
+          currentLocation: product.currentLocation,
+          expirationDate: product.expirationDate,
+          certifications: product.metadata.certification
+        }
+      };
+      
+      const qrUrl = `${window.location.origin}/product-scan?data=${encodeURIComponent(JSON.stringify(qrData))}`;
+      
+      // Crear QR code usando una librería simple (en producción usarías una real)
+      const qrCodeDataUrl = await generateQRCode(qrUrl);
+      
+      // Mostrar modal o descargar QR
+      downloadQRCode(qrCodeDataUrl, `QR_${product.name}_${product.batchNumber}.png`);
+      
+      toast.success(`QR generado para "${product.name}"`);
+      
+    } catch (error) {
+      console.error('Error generando QR:', error);
+      toast.error('Error al generar el código QR');
+    }
+  };
+
+  // Función simulada para generar QR (en producción usarías qrcode.js o similar)
+  const generateQRCode = async (data: string): Promise<string> => {
+    // Simular generación de QR code
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        // En producción esto sería un QR real
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = 200;
+        canvas.height = 200;
+        
+        if (ctx) {
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, 200, 200);
+          ctx.fillStyle = '#000000';
+          ctx.font = '12px Arial';
+          ctx.fillText('QR CODE', 70, 100);
+          ctx.fillText('(Simulado)', 65, 120);
+        }
+        
+        resolve(canvas.toDataURL());
+      }, 500);
+    });
+  };
+
+  const downloadQRCode = (dataUrl: string, filename: string) => {
+    const link = document.createElement('a');
+    link.download = filename;
+    link.href = dataUrl;
+    link.click();
+  };
+
   const handleTransferComplete = async (product: Product, toRole: UserRole, recipient: any) => {
     // Update stats
     setStats(prevStats => ({
@@ -663,6 +730,11 @@ export default function RetailerDashboard() {
                             onClick={() => handleDetailsClick(product)}
                             className="btn-secondary text-sm">
                             Ver Historial
+                          </button>
+                          <button 
+                            onClick={() => handleGenerateQR(product)}
+                            className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm transition-colors">
+                            Generar QR
                           </button>
                           <button 
                             onClick={() => handleTransferClick(product)}

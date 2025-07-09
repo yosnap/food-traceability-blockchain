@@ -248,11 +248,43 @@ export default function ConsumerDashboard() {
 
   const handleScanQR = () => {
     setShowScanner(true);
-    toast.success('Función de escaneo QR - Demo', { id: 'scan-demo' });
-    // En una implementación real, aquí se abriría la cámara
+    toast('Simulando escaneo QR - En producción se abriría la cámara', { 
+      icon: '📱',
+      duration: 3000,
+      id: 'scan-demo' 
+    });
+    
+    // Simulación de escaneo exitoso
     setTimeout(() => {
       setShowScanner(false);
-      toast.success('Producto escaneado: Tomates Cherry Orgánicos', { id: 'scan-success' });
+      
+      // Crear datos de ejemplo para demostrar la funcionalidad
+      const demoQRData = {
+        productId: 'PROD-001',
+        productName: 'Tomates Cherry Orgánicos',
+        batchNumber: 'TCO-2025-001',
+        retailerId: 'retailer-001',
+        retailerName: 'SuperMarket Plus',
+        timestamp: new Date().toISOString(),
+        traceability: {
+          producer: {
+            name: 'Finca Verde Esperanza',
+            location: 'Cartago, Costa Rica'
+          },
+          currentLocation: 'SuperMarket Plus',
+          expirationDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
+          certifications: 'Orgánico, HACCP'
+        }
+      };
+      
+      const qrUrl = `/product-scan?data=${encodeURIComponent(JSON.stringify(demoQRData))}`;
+      
+      toast.success('¡Producto escaneado exitosamente!');
+      
+      // Redirigir a la página de información del producto
+      setTimeout(() => {
+        router.push(qrUrl);
+      }, 1000);
     }, 2000);
   };
 
