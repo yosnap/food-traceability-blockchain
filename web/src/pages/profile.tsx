@@ -29,6 +29,7 @@ import { walletService } from '@/services/walletService';
 import { getRoleLabel, getRoleColor, truncateAddress } from '@/utils/helpers';
 import { UserRole } from '@/types';
 import Breadcrumb from '@/components/Breadcrumb';
+import SafeDate from '@/components/SafeDate';
 
 interface UserInfo {
   address: string;
@@ -63,6 +64,7 @@ export default function ProfilePage() {
   const { user, logout } = useAuth();
   const [userInfo, setUserInfo] = useState<UserInfo | null>(null);
   const [walletInfo, setWalletInfo] = useState<WalletInfo | null>(null);
+  const [transfers, setTransfers] = useState<any[]>([]);
   const [showPrivateKey, setShowPrivateKey] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [walletProvider, setWalletProvider] = useState<'metamask' | 'predefined' | null>(null);
@@ -91,6 +93,17 @@ export default function ProfilePage() {
       if (typeof window !== 'undefined') {
         const storedUser = localStorage.getItem('authUser');
         const storedRole = localStorage.getItem('userRole');
+        
+        // Cargar transferencias del usuario
+        try {
+          const { getMyTransfers } = await import('@/utils/api');
+          const transfersResponse = await getMyTransfers();
+          if (transfersResponse.success) {
+            setTransfers(transfersResponse.data);
+          }
+        } catch (error) {
+          console.error('Error loading transfers:', error);
+        }
         
         if (storedUser && storedRole) {
           const parsedUser = JSON.parse(storedUser);
@@ -293,7 +306,7 @@ export default function ProfilePage() {
         </header>
 
         <main className="py-8">
-          <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
             {/* Breadcrumb */}
             <div className="mb-6">
               <Breadcrumb 
@@ -768,21 +781,82 @@ export default function ProfilePage() {
                 <h2 className="text-xl font-semibold text-gray-900">Transferencias Recientes</h2>
               </div>
               
-              <div className="text-center py-8">
-                <ArrowRightIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">Historial de Transferencias</h3>
-                <p className="text-gray-600 mb-4">
-                  {userInfo.role === UserRole.PRODUCER && 'Aquí aparecerán los productos que has transferido a procesadores y distribuidores.'}
-                  {userInfo.role === UserRole.PROCESSOR && 'Aquí aparecerán los productos procesados que has transferido a distribuidores.'}
-                  {userInfo.role === UserRole.DISTRIBUTOR && 'Aquí aparecerán los productos que has distribuido a minoristas.'}
-                  {userInfo.role === UserRole.RETAILER && 'Aquí aparecerán los productos vendidos a consumidores.'}
-                  {userInfo.role === UserRole.CONSUMER && 'Aquí aparecerán los productos que has marcado como consumidos.'}
-                  {userInfo.role === UserRole.ADMIN && 'Historial completo de transferencias del sistema.'}
-                </p>
-                <p className="text-sm text-gray-500">
-                  Las transferencias realizadas se registran en el blockchain para garantizar la trazabilidad completa.
-                </p>
-              </div>
+              {transfers.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Producto
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Destinatario
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Tipo
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Fecha
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Notas
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {transfers.slice(0, 5).map((transfer, index) => (
+                        <tr key={index}>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm font-medium text-gray-900">
+                              {transfer.tokenId}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              Cantidad: {transfer.amount}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-gray-900">
+                              {transfer.to.slice(0, 6)}...{transfer.to.slice(-4)}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                              transfer.transferType === 'PROCESSING' ? 'bg-blue-100 text-blue-800' :
+                              transfer.transferType === 'DISTRIBUTION' ? 'bg-green-100 text-green-800' :
+                              transfer.transferType === 'SALE' ? 'bg-purple-100 text-purple-800' :
+                              'bg-gray-100 text-gray-800'
+                            }`}>
+                              {transfer.transferType}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            <SafeDate date={transfer.timestamp} />
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {transfer.notes || 'Sin notas'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <ArrowRightIcon className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">Sin transferencias</h3>
+                  <p className="text-gray-600 mb-4">
+                    {userInfo.role === UserRole.PRODUCER && 'Aquí aparecerán los productos que has transferido a procesadores y distribuidores.'}
+                    {userInfo.role === UserRole.PROCESSOR && 'Aquí aparecerán los productos procesados que has transferido a distribuidores.'}
+                    {userInfo.role === UserRole.DISTRIBUTOR && 'Aquí aparecerán los productos que has distribuido a minoristas.'}
+                    {userInfo.role === UserRole.RETAILER && 'Aquí aparecerán los productos vendidos a consumidores.'}
+                    {userInfo.role === UserRole.CONSUMER && 'Aquí aparecerán los productos que has marcado como consumidos.'}
+                    {userInfo.role === UserRole.ADMIN && 'Historial completo de transferencias del sistema.'}
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    Las transferencias realizadas se registran en el blockchain para garantizar la trazabilidad completa.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Estado de la Cuenta */}
