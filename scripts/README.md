@@ -61,6 +61,8 @@ El script crea aproximadamente **50 productos** distribuidos as�:
   - `0x8Dc664D838Ad25E9bF260D9E1E76fC377FA11fF5` - SuperMarket Plus
 - **1 Consumidor**: Para simular compras finales
   - `0xcA01956A17ABF046b8e7261BF2E6B4F41Ad1FF16` - Consumidor Final
+- **1 Administrador**: Para gestión y verificación de cuentas
+  - `0xc573fCb764C3f21bDB6bb5563982E4AF47529f8d` - Administrador del Sistema
 
 ### Productos
 - **20 productos frescos**: Frutas y verduras de productores

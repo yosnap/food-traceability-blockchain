@@ -105,6 +105,10 @@ declare -A RETAILERS=(
     ["0x8Dc664D838Ad25E9bF260D9E1E76fC377FA11fF5"]="SuperMarket Plus"
 )
 
+# ADMIN wallet para verificación y gestión
+ADMIN_WALLET="0xc573fCb764C3f21bDB6bb5563982E4AF47529f8d"
+ADMIN_NAME="Administrador del Sistema"
+
 # Productos de ejemplo
 FRESH_PRODUCTS=(
     "Tomates Cherry Orgánicos|Cherry|0.5|FRESH"
@@ -428,7 +432,8 @@ main() {
     echo "   🚚 Distribuidores: ${#DISTRIBUTORS[@]}"
     echo "   🏪 Retailers: ${#RETAILERS[@]}"
     echo "   👤 Consumidores: 1"
-    echo "   💳 Wallets únicas: $((${#PRODUCERS[@]} + ${#PROCESSORS[@]} + ${#DISTRIBUTORS[@]} + ${#RETAILERS[@]} + 1))"
+    echo "   👑 Administrador: 1"
+    echo "   💳 Wallets únicas: $((${#PRODUCERS[@]} + ${#PROCESSORS[@]} + ${#DISTRIBUTORS[@]} + ${#RETAILERS[@]} + 2))"
     echo ""
     echo -e "${GREEN}✨ La plataforma está lista para la presentación!${NC}"
 }

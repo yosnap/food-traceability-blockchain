@@ -25,6 +25,9 @@ const WALLETS = {
   ],
   RETAILER: [
     { address: '0x8Dc664D838Ad25E9bF260D9E1E76fC377FA11fF5', name: 'SuperMarket Plus' }
+  ],
+  ADMIN: [
+    { address: '0xc573fCb764C3f21bDB6bb5563982E4AF47529f8d', name: 'Administrador del Sistema' }
   ]
 };
 
@@ -359,7 +362,9 @@ async function initializeDemoData() {
     console.log(`   🏭 Procesadores: ${WALLETS.PROCESSOR.length}`);
     console.log(`   🚚 Distribuidores: ${WALLETS.DISTRIBUTOR.length}`);
     console.log(`   🏪 Retailers: ${WALLETS.RETAILER.length}`);
-    console.log(`   💳 Wallets únicas: ${Object.values(WALLETS).flat().length}`);
+    console.log(`   👤 Consumidores: 1`);
+    console.log(`   👑 Administrador: ${WALLETS.ADMIN.length}`);
+    console.log(`   💳 Wallets únicas: ${Object.values(WALLETS).flat().length + 1}`);
     console.log('\n✨ La plataforma está lista para la presentación!');
     
   } catch (error) {
