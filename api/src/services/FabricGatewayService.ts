@@ -697,9 +697,133 @@ export class FabricGatewayService {
             const transfers = JSON.parse(result);
             console.log(`✅ Obtenidas ${transfers.length} transferencias para propietario ${ownerAddress}`);
             return transfers;
-        } catch (error) {
+        } catch (error: any) {
             console.error(`❌ Error obteniendo transferencias del propietario ${ownerAddress}:`, error.message);
             return [];
+        }
+    }
+
+    /**
+     * Obtiene productos que están próximos a expirar
+     */
+    async getExpiringProducts(days: number = 7): Promise<any[]> {
+        try {
+            const result = await this.evaluateTransactionAsUser(
+                'admin',
+                'admin',
+                'food',
+                'getExpiringProducts',
+                days.toString()
+            );
+            const products = JSON.parse(result);
+            console.log(`✅ Obtenidos ${products.length} productos próximos a expirar en ${days} días`);
+            return products;
+        } catch (error: any) {
+            console.error(`❌ Error obteniendo productos próximos a expirar:`, error.message);
+            return [];
+        }
+    }
+
+    /**
+     * Marca un producto como consumido
+     */
+    async markAsConsumed(
+        consumerUserId: string,
+        productId: string,
+        ownerAddress: string,
+        consumptionData: {
+            consumedDate?: string;
+            rating?: number;
+            feedback?: string;
+        } = {}
+    ): Promise<string> {
+        return await this.submitTransactionAsUser(
+            consumerUserId,
+            'consumer',
+            'food',
+            'markAsConsumed',
+            productId,
+            ownerAddress,
+            consumptionData.consumedDate || new Date().toISOString(),
+            consumptionData.rating?.toString() || '0',
+            consumptionData.feedback || ''
+        );
+    }
+
+    /**
+     * Obtiene información de un usuario registrado
+     */
+    async getUser(address: string): Promise<any> {
+        try {
+            const result = await this.evaluateTransactionAsUser(
+                'admin',
+                'admin',
+                'food',
+                'getUser',
+                address
+            );
+            return JSON.parse(result);
+        } catch (error: any) {
+            console.error(`❌ Error obteniendo usuario ${address}:`, error.message);
+            return null;
+        }
+    }
+
+    /**
+     * Configura las preferencias de notificación para un usuario
+     */
+    async setNotificationSettings(
+        userId: string,
+        userRole: string,
+        settings: {
+            emailNotifications?: boolean;
+            smsNotifications?: boolean;
+            pushNotifications?: boolean;
+            expirationAlerts?: boolean;
+            transferAlerts?: boolean;
+        }
+    ): Promise<string> {
+        return await this.submitTransactionAsUser(
+            userId,
+            userRole,
+            'food',
+            'setNotificationSettings',
+            JSON.stringify(settings)
+        );
+    }
+
+    /**
+     * Obtiene estadísticas del blockchain para el panel administrativo
+     */
+    async getBlockchainStats(): Promise<any> {
+        try {
+            const [products, users] = await Promise.all([
+                this.getAllProducts(),
+                this.evaluateTransactionAsUser('admin', 'admin', 'food', 'getAllUsers')
+                    .then(result => JSON.parse(result))
+                    .catch(() => [])
+            ]);
+
+            const activeTransfers = products.filter(p => p.status === 'IN_TRANSIT' || p.status === 'PENDING').length;
+            const totalProducts = products.length;
+            const totalUsers = users.length;
+
+            return {
+                totalProducts,
+                totalUsers,
+                activeTransfers,
+                systemAlerts: 0, // Por implementar
+                recentActivity: products.slice(-5) // Últimos 5 productos
+            };
+        } catch (error: any) {
+            console.error('❌ Error obteniendo estadísticas blockchain:', error.message);
+            return {
+                totalProducts: 0,
+                totalUsers: 0,
+                activeTransfers: 0,
+                systemAlerts: 0,
+                recentActivity: []
+            };
         }
     }
 

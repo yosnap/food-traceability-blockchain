@@ -13,14 +13,7 @@ export interface SimpleUser {
     permissions: string[];
 }
 
-// Extender Request para incluir usuario autenticado
-declare global {
-    namespace Express {
-        interface Request {
-            user?: SimpleUser;
-        }
-    }
-}
+// Usar la interface global existente en lugar de redefinir
 
 /**
  * Middleware para modo de desarrollo (omitir autenticación)
@@ -31,13 +24,14 @@ export const devModeAuth = (req: Request, res: Response, next: NextFunction) => 
     const userId = req.headers['x-user-id'] as string || 'User1@org1.example.com';
     
     req.user = {
-        userId,
-        role,
         address: '0x742d35Cc8C6C330B4E3C2986c9b6C02b4C8B878A',
+        role,
         name: `Usuario ${role}`,
+        isVerified: true,
+        userId,
         organization: role === 'producer' ? 'org1' : 'org2',
         permissions: ['*']
-    };
+    } as any;
     
     console.log(`🔧 Autenticado como: ${req.user.name} (${req.user.role})`);
     next();

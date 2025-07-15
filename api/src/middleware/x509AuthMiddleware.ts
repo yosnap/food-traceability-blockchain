@@ -14,6 +14,8 @@ interface X509JWTPayload {
     mspId: string;
     certificateId: string;
     organizationName: string;
+    address?: string;
+    name?: string;
     iat?: number;
     exp?: number;
 }
@@ -81,11 +83,14 @@ export const x509AuthMiddleware = (req: AuthenticatedRequest, res: Response, nex
 
         // Agregar información del usuario autenticado al request
         req.user = {
+            address: decoded.address || 'unknown',
             userId: decoded.userId,
             role: decoded.role.toLowerCase(),
             mspId: decoded.mspId,
-            certificateId: decoded.certificateId
-        };
+            certificateId: decoded.certificateId,
+            name: decoded.name,
+            isVerified: true
+        } as any;
 
         console.log(`🔐 Usuario autenticado: ${decoded.userId} (${decoded.role}) - MSP: ${decoded.mspId}`);
         next();

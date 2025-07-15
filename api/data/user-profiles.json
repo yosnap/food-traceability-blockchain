@@ -1,0 +1,77 @@
+[
+  {
+    "walletAddress": "0xc573fCb764C3f21bDB6bb5563982E4AF47529f8d",
+    "role": "admin",
+    "personalInfo": {
+      "fullName": "Administrador Principal",
+      "email": "admin@foodtraceability.com",
+      "phone": "+34900000000",
+      "organization": "Food Traceability System",
+      "address": "Oficina Central",
+      "country": "España"
+    },
+    "businessInfo": {
+      "companyName": "Food Traceability System",
+      "businessType": "Administración del Sistema",
+      "registrationNumber": "ADMIN001",
+      "description": "Administrador principal del sistema de trazabilidad"
+    },
+    "registrationId": "reg_admin_001",
+    "isActive": true,
+    "createdAt": "2025-07-15T01:00:00.000Z",
+    "updatedAt": "2025-07-15T01:00:00.000Z",
+    "certificateGenerated": true,
+    "fabricUserId": "AdminPrincipal@org1.example.com",
+    "mspId": "Org1MSP"
+  },
+  {
+    "walletAddress": "0x742d35Cc8C6C330B4E3C2986c9b6C02b4C8B878A",
+    "role": "processor",
+    "personalInfo": {
+      "fullName": "Juan Procesador",
+      "email": "juan@procesadora.com",
+      "phone": "+34123456789",
+      "organization": "Procesadora AlimentosCorp",
+      "address": "Calle Industrial 123",
+      "country": "España"
+    },
+    "businessInfo": {
+      "companyName": "Procesadora AlimentosCorp",
+      "businessType": "Procesamiento de Alimentos",
+      "registrationNumber": "P123456789",
+      "description": "Empresa especializada en procesamiento de productos agrícolas"
+    },
+    "registrationId": "reg_processor_001",
+    "isActive": true,
+    "createdAt": "2025-07-15T01:00:00.000Z",
+    "updatedAt": "2025-07-15T01:00:00.000Z",
+    "certificateGenerated": true,
+    "fabricUserId": "User1@org2.example.com",
+    "mspId": "Org2MSP"
+  },
+  {
+    "walletAddress": "0x1234567890123456789012345678901234567890",
+    "role": "producer",
+    "personalInfo": {
+      "fullName": "María Productora",
+      "email": "maria@granja.com",
+      "phone": "+34987654321",
+      "organization": "Granja Orgánica Verde",
+      "address": "Finca Rural 456",
+      "country": "España"
+    },
+    "businessInfo": {
+      "companyName": "Granja Orgánica Verde",
+      "businessType": "Producción Agrícola",
+      "registrationNumber": "G987654321",
+      "description": "Granja especializada en productos orgánicos"
+    },
+    "registrationId": "reg_producer_001",
+    "isActive": true,
+    "createdAt": "2025-07-15T01:00:00.000Z",
+    "updatedAt": "2025-07-15T01:00:00.000Z",
+    "certificateGenerated": true,
+    "fabricUserId": "User1@org1.example.com",
+    "mspId": "Org1MSP"
+  }
+]

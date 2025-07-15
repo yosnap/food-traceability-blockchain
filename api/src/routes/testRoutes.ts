@@ -117,10 +117,11 @@ router.post('/auth/generate-token', (req: Request, res: Response): void => {
         const { userId, role, name } = req.body;
         
         if (!userId || !role) {
-            return res.status(400).json({
+            res.status(400).json({
                 success: false,
                 message: 'userId y role son requeridos'
             });
+            return;
         }
 
         const token = createTestToken({

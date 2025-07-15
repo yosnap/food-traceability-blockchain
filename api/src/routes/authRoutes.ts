@@ -43,19 +43,21 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
     const { role, userId }: LoginRequest = req.body;
 
     if (!role) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'Role es requerido'
       });
+      return;
     }
 
     // Validar roles permitidos (actualizado según repositorio de referencia)
     const allowedRoles = ['producer', 'factory', 'processor', 'distributor', 'retailer', 'consumer', 'admin'];
     if (!allowedRoles.includes(role.toLowerCase())) {
-      return res.status(400).json({
+      res.status(400).json({
         success: false,
         error: 'Role inválido. Roles permitidos: producer, factory, processor, distributor, retailer, consumer, admin'
       });
+      return;
     }
 
     // Mapear rol a organización y usuario por defecto
@@ -102,11 +104,12 @@ router.post('/login', async (req: Request, res: Response): Promise<void> => {
       console.log('✅ Blockchain conectado con X.509 durante login:', pingResult);
     } catch (pingError) {
       console.warn('⚠️ Blockchain no disponible durante login:', pingError);
-      return res.status(503).json({
+      res.status(503).json({
         success: false,
         error: 'Blockchain no disponible o certificados X.509 inválidos',
         details: pingError instanceof Error ? pingError.message : 'Error desconocido'
       });
+      return;
     }
 
     // Generar datos de usuario basados en el rol y certificado X.509
@@ -198,10 +201,11 @@ router.get('/verify', async (req: Request, res: Response): Promise<void> => {
     const authHeader = req.headers.authorization;
     
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({
+      res.status(401).json({
         success: false,
         error: 'Token no proporcionado'
       });
+      return;
     }
 
     const token = authHeader.substring(7);
@@ -222,10 +226,11 @@ router.get('/verify', async (req: Request, res: Response): Promise<void> => {
         timestamp: new Date().toISOString()
       });
     } catch (jwtError) {
-      return res.status(401).json({
+      res.status(401).json({
         success: false,
         error: 'Token inválido o expirado'
       });
+      return;
     }
 
   } catch (error: any) {

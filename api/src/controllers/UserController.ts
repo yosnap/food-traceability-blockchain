@@ -47,7 +47,7 @@ export class UserController {
                 licenseNumber
             };
 
-            const result = await fabricGatewayService.registerUser(userData);
+            const result = await fabricGatewayService.registerUser('admin', userData);
 
             res.status(201).json({
                 success: true,
@@ -159,16 +159,18 @@ export class UserController {
             } = req.body;
 
             const settingsData = {
-                userId: userAddress,
-                enableNotifications,
-                notificationDays,
-                enableEmailNotifications,
-                enablePushNotifications,
-                quietHoursData: quietHours ? JSON.stringify(quietHours) : undefined,
-                categorySettingsData: categorySettings ? JSON.stringify(categorySettings) : undefined
+                emailNotifications: enableEmailNotifications,
+                smsNotifications: false,
+                pushNotifications: enablePushNotifications,
+                expirationAlerts: enableNotifications,
+                transferAlerts: enableNotifications
             };
 
-            const result = await fabricGatewayService.setNotificationSettings(settingsData);
+            const result = await fabricGatewayService.setNotificationSettings(
+                req.user?.userId || req.user?.address || "user",
+                req.user?.role || "consumer",
+                settingsData
+            );
 
             res.json({
                 success: true,
@@ -327,7 +329,7 @@ export class UserController {
             };
 
             // Re-registrar usuario con datos actualizados
-            const result = await fabricGatewayService.registerUser(updatedUserData);
+            const result = await fabricGatewayService.registerUser('admin', updatedUserData);
 
             res.json({
                 success: true,

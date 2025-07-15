@@ -15,14 +15,7 @@ export interface AuthenticatedUser {
     permissions: string[];
 }
 
-// Extender interface de Request para incluir usuario autenticado
-declare global {
-    namespace Express {
-        interface Request {
-            user?: AuthenticatedUser;
-        }
-    }
-}
+// Usar la interface global existente en lugar de redefinir
 
 // Mapeo de roles a organizaciones de Fabric
 const ROLE_TO_ORG_MAP: Record<string, string> = {
@@ -52,33 +45,34 @@ export const authenticateUser = async (req: Request, res: Response, next: NextFu
         const token = extractToken(req);
         
         if (!token) {
-            return res.status(401).json({
+            res.status(401).json({
                 success: false,
                 message: 'Token de acceso requerido',
                 code: 'NO_TOKEN'
-            });
+            }); return;
         }
 
         // Verificar y decodificar JWT
         const decoded = jwt.verify(token, process.env.JWT_SECRET || 'default-secret') as any;
         
-        // Crear objeto de usuario autenticado
-        const user: AuthenticatedUser = {
-            userId: decoded.userId || decoded.sub,
-            role: decoded.role,
+        // Crear objeto de usuario autenticado compatible con interface global
+        const user = {
             address: decoded.address,
+            role: decoded.role,
             name: decoded.name,
+            isVerified: true,
+            userId: decoded.userId || decoded.sub,
             organization: ROLE_TO_ORG_MAP[decoded.role] || 'org1',
             permissions: ROLE_PERMISSIONS[decoded.role] || []
-        };
+        } as any;
 
         // Validar que el rol sea válido
         if (!user.role || !ROLE_PERMISSIONS[user.role]) {
-            return res.status(403).json({
+            res.status(403).json({
                 success: false,
                 message: 'Rol de usuario inválido',
                 code: 'INVALID_ROLE'
-            });
+            }); return;
         }
 
         // Adjuntar usuario a la request
@@ -91,26 +85,26 @@ export const authenticateUser = async (req: Request, res: Response, next: NextFu
         console.error('❌ Error de autenticación:', error.message);
         
         if (error.name === 'JsonWebTokenError') {
-            return res.status(401).json({
+            res.status(401).json({
                 success: false,
                 message: 'Token inválido',
                 code: 'INVALID_TOKEN'
-            });
+            }); return;
         }
         
         if (error.name === 'TokenExpiredError') {
-            return res.status(401).json({
+            res.status(401).json({
                 success: false,
                 message: 'Token expirado',
                 code: 'TOKEN_EXPIRED'
-            });
+            }); return;
         }
 
-        return res.status(500).json({
+        res.status(500).json({
             success: false,
             message: 'Error interno de autenticación',
             code: 'AUTH_ERROR'
-        });
+        }); return;
     }
 };
 
@@ -122,11 +116,11 @@ export const requirePermission = (permission: string) => {
         const user = req.user;
         
         if (!user) {
-            return res.status(401).json({
+            res.status(401).json({
                 success: false,
                 message: 'Usuario no autenticado',
                 code: 'NOT_AUTHENTICATED'
-            });
+            }); return;
         }
 
         // Admin tiene todos los permisos
@@ -136,14 +130,14 @@ export const requirePermission = (permission: string) => {
 
         // Verificar permiso específico
         if (!user.permissions.includes(permission)) {
-            return res.status(403).json({
+            res.status(403).json({
                 success: false,
                 message: `Permiso requerido: ${permission}`,
                 code: 'INSUFFICIENT_PERMISSIONS',
                 required: permission,
                 userRole: user.role,
                 userPermissions: user.permissions
-            });
+            }); return;
         }
 
         next();
@@ -158,21 +152,21 @@ export const requireRole = (...allowedRoles: string[]) => {
         const user = req.user;
         
         if (!user) {
-            return res.status(401).json({
+            res.status(401).json({
                 success: false,
                 message: 'Usuario no autenticado',
                 code: 'NOT_AUTHENTICATED'
-            });
+            }); return;
         }
 
         if (!allowedRoles.includes(user.role)) {
-            return res.status(403).json({
+            res.status(403).json({
                 success: false,
                 message: `Rol no autorizado. Roles permitidos: ${allowedRoles.join(', ')}`,
                 code: 'ROLE_NOT_ALLOWED',
                 userRole: user.role,
                 allowedRoles
-            });
+            }); return;
         }
 
         next();
@@ -187,11 +181,11 @@ export const requireOwnership = (req: Request, res: Response, next: NextFunction
     const resourceOwnerId = req.params.userId || req.body.userId || req.body.address;
     
     if (!user) {
-        return res.status(401).json({
+        res.status(401).json({
             success: false,
             message: 'Usuario no autenticado',
             code: 'NOT_AUTHENTICATED'
-        });
+        }); return;
     }
 
     // Admin puede acceder a cualquier recurso
@@ -201,11 +195,11 @@ export const requireOwnership = (req: Request, res: Response, next: NextFunction
 
     // Verificar que el usuario sea el propietario del recurso
     if (user.userId !== resourceOwnerId && user.address !== resourceOwnerId) {
-        return res.status(403).json({
+        res.status(403).json({
             success: false,
             message: 'Solo puedes acceder a tus propios recursos',
             code: 'NOT_OWNER'
-        });
+        }); return;
     }
 
     next();

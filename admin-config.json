@@ -1,0 +1,53 @@
+{
+  "adminPrincipal": {
+    "walletAddress": "0xc573fCb764C3f21bDB6bb5563982E4AF47529f8d",
+    "role": "admin",
+    "mspId": "Org1MSP",
+    "organizationId": "org1",
+    "userName": "AdminPrincipal",
+    "certificateId": "admin-principal",
+    "description": "Administrador principal del sistema con certificado X.509",
+    "permissions": [
+      "registerUser",
+      "revokeUser",
+      "updateUser",
+      "listUsers",
+      "manageUserCertificates",
+      "viewAllTransactions",
+      "systemConfiguration"
+    ]
+  },
+  "certificateConfig": {
+    "caHost": "localhost:7054",
+    "caName": "ca-org1",
+    "validityPeriod": "1y",
+    "autoRenewal": true,
+    "renewalThreshold": "30d"
+  },
+  "operationSignatures": {
+    "registerUser": "registerUser:{walletAddress}:{role}",
+    "revokeUser": "revokeUser:{walletAddress}",
+    "updateUser": "updateUser:{walletAddress}:{newRole}",
+    "createCertificate": "createCertificate:{walletAddress}:{role}",
+    "revokeCertificate": "revokeCertificate:{walletAddress}"
+  },
+  "fabricNetworkConfig": {
+    "fabricSamplesPath": "../fabric-samples/test-network",
+    "tlsCertPath": "organizations/fabric-ca/org1/tls-cert.pem",
+    "adminCertPath": "organizations/peerOrganizations/org1.example.com/users/AdminPrincipal@org1.example.com/msp/signcerts/cert.pem",
+    "adminKeyPath": "organizations/peerOrganizations/org1.example.com/users/AdminPrincipal@org1.example.com/msp/keystore"
+  },
+  "security": {
+    "requireCertificateValidation": true,
+    "requireOperationSignatures": true,
+    "signatureValidityPeriod": "5m",
+    "maxFailedAttempts": 3,
+    "lockoutDuration": "15m"
+  },
+  "initialization": {
+    "version": "1.0.0",
+    "initializedAt": null,
+    "lastCertificateCheck": null,
+    "systemReady": false
+  }
+}

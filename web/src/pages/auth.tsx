@@ -119,34 +119,65 @@ export default function AuthPage() {
       const wallet = await walletService.connectMetaMask();
       setMetaMaskAddress(wallet.address);
 
+      console.log('🔍 DEBUG: MetaMask wallet address:', wallet.address);
       toast.success(`MetaMask conectado: ${wallet.address.slice(0, 6)}...${wallet.address.slice(-4)}`, { id: 'metamask' });
 
-      // Simular login con la dirección de MetaMask
-      const user = {
-        id: wallet.address,
-        address: wallet.address,
-        name: `Usuario MetaMask (${getRoleLabel(selectedRole)})`,
-        role: selectedRole,
-        fabricUserId: `metamask_${wallet.address}`,
-        mspId: selectedRole === UserRole.PRODUCER ? 'Org1MSP' : 'Org2MSP',
-        organizationName: selectedRole === UserRole.PRODUCER ? 'org1.example.com' : 'org2.example.com'
-      };
+      // Verificar que el usuario esté registrado con el rol correcto
+      console.log('🔍 DEBUG: Checking registration status for:', wallet.address);
+      const statusResponse = await fetch(`http://localhost:3001/api/registration/status/${wallet.address}`);
+      if (!statusResponse.ok) {
+        console.log('🔍 DEBUG: Status response not OK:', statusResponse.status, statusResponse.statusText);
+        throw new Error('Usuario no registrado. Debes registrarte primero antes de acceder.');
+      }
+      
+      const statusData = await statusResponse.json();
+      console.log('🔍 DEBUG: Status data received:', statusData);
+      if (!statusData.success || !statusData.profile || !statusData.profile.isActive) {
+        console.log('🔍 DEBUG: Registration check failed:', {
+          success: statusData.success,
+          profile: statusData.profile,
+          isActive: statusData.profile?.isActive
+        });
+        throw new Error('Usuario no registrado o inactivo. Contacta al administrador.');
+      }
+      
+      if (statusData.profile.role?.toLowerCase() !== selectedRole.toLowerCase()) {
+        throw new Error(`Tu cuenta está registrada como ${statusData.profile.role.toUpperCase()}, no como ${selectedRole.toUpperCase()}.`);
+      }
 
-      const token = `metamask_${wallet.address}_${Date.now()}`;
+      // Hacer login real con el API usando el rol correcto
+      const metamaskToken = `metamask_${wallet.address}_${Date.now()}`;
+      const loginResponse = await fetch('http://localhost:3001/api/auth/login', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${metamaskToken}`
+        },
+        body: JSON.stringify({ role: selectedRole })
+      });
 
-      // Guardar info de wallet MetaMask
+      if (!loginResponse.ok) {
+        throw new Error('Error al autenticar con el sistema.');
+      }
+
+      const loginData = await loginResponse.json();
+      if (!loginData.success) {
+        throw new Error(loginData.error || 'Error en el login');
+      }
+
+      // Guardar datos de autenticación reales
       setWalletInfo({ address: wallet.address, role: selectedRole });
       
       if (typeof window !== 'undefined') {
-        localStorage.setItem('authToken', token);
-        localStorage.setItem('authUser', JSON.stringify(user));
+        localStorage.setItem('authToken', loginData.data.token);
+        localStorage.setItem('authUser', JSON.stringify(loginData.data.user));
         localStorage.setItem('userRole', selectedRole);
         localStorage.setItem('walletInfo', JSON.stringify({ address: wallet.address, role: selectedRole }));
         localStorage.setItem('walletProvider', 'metamask');
       }
 
-      // Llamar al hook de autenticación
-      login(token, user);
+      // Llamar al hook de autenticación con datos reales
+      login(loginData.data.token, loginData.data.user);
 
       // Pequeño delay para UX
       await new Promise(resolve => setTimeout(resolve, 500));

@@ -9,10 +9,13 @@ import { hlfService } from '../services/HLFService.js';
 // Interface para usuario autenticado con certificados X.509
 export interface AuthenticatedRequest extends Request {
     user?: {
+        address: string;
         userId: string;
         role: string;
         mspId: string;
         certificateId: string;
+        name?: string;
+        isVerified?: boolean;
     };
 }
 

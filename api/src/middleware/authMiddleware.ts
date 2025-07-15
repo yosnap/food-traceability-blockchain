@@ -15,6 +15,13 @@ declare global {
                 role: string;
                 name?: string;
                 isVerified?: boolean;
+                userId?: string;
+                mspId?: string;
+                organizationName?: string;
+                fabricUserId?: string;
+                permissions?: string[];
+                organization?: string;
+                certificateId?: string;
             };
         }
     }
@@ -75,7 +82,7 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
         // Fallback a usuarios mock solo si la validación JWT falla y estamos en desarrollo
         if (!user && process.env.NODE_ENV === 'development') {
             console.log('🔄 JWT validation failed, trying mock users...');
-            user = getMockUser(token);
+            user = await getMockUser(token);
         }
 
         if (!user) {
@@ -117,7 +124,7 @@ export const authMiddleware = async (req: Request, res: Response, next: NextFunc
 /**
  * Usuarios mock para desarrollo
  */
-function getMockUser(token: string) {
+async function getMockUser(token: string) {
     const mockUsers: { [key: string]: any } = {
         'producer-token': {
             address: '0x1234567890123456789012345678901234567890',
@@ -171,16 +178,16 @@ function getMockUser(token: string) {
 
     // Verificar si es un token de MetaMask
     if (token.startsWith('metamask_')) {
-        return handleMetaMaskToken(token);
+        return await handleMetaMaskToken(token);
     }
 
     return mockUsers[token] || null;
 }
 
 /**
- * Manejar tokens de MetaMask
+ * Manejar tokens de MetaMask - Consulta rol real del sistema de registro
  */
-function handleMetaMaskToken(token: string) {
+async function handleMetaMaskToken(token: string) {
     // Formato: metamask_0x{address}_{timestamp} o metamask_0x{address}
     const parts = token.split('_');
     if (parts.length < 2) return null;
@@ -194,17 +201,38 @@ function handleMetaMaskToken(token: string) {
         return null;
     }
     
-    // Todas las direcciones de MetaMask son válidas
-    // Asignar rol PRODUCER por defecto, pero permitir escalabilidad de roles
-    return {
-        address: address,
-        role: 'PRODUCER', // Por defecto, asignar rol PRODUCER
-        name: `Usuario MetaMask (${address.slice(0, 6)}...${address.slice(-4)})`,
-        isVerified: true,
-        fabricUserId: `metamask_${address}`,
-        mspId: 'Org1MSP',
-        organizationName: 'org1.example.com'
-    };
+    try {
+        // Consultar el rol real del usuario registrado
+        const { RegistrationRequestService } = await import('../services/RegistrationRequestService.js');
+        const registrationService = new RegistrationRequestService();
+        const userProfile = await registrationService.getUserProfile(address);
+        
+        if (!userProfile || !userProfile.isActive) {
+            console.log('❌ Usuario no registrado o inactivo:', address);
+            return null;
+        }
+        
+        console.log('✅ Usuario MetaMask verificado:', { 
+            address, 
+            role: userProfile.role,
+            name: userProfile.personalInfo.fullName 
+        });
+        
+        return {
+            address: address,
+            role: userProfile.role.toUpperCase(),
+            name: userProfile.personalInfo.fullName,
+            isVerified: userProfile.isActive,
+            userId: userProfile.fabricUserId || `metamask_${address}`,
+            fabricUserId: userProfile.fabricUserId,
+            mspId: userProfile.mspId || 'Org1MSP',
+            organizationName: userProfile.businessInfo?.companyName || 'org1.example.com'
+        };
+        
+    } catch (error: any) {
+        console.log('❌ Error verificando usuario MetaMask:', error.message);
+        return null;
+    }
 }
 
 /**

@@ -46,6 +46,8 @@ import hlfRoutes from './routes/hlfRoutes.js';
 console.log('🔧 DEBUG: hlfRoutes importado');
 import userDiscoveryRoutes from './routes/userDiscoveryRoutes.js';
 console.log('🔧 DEBUG: userDiscoveryRoutes importado');
+import registrationRoutes from './routes/registrationRoutes.js';
+console.log('🔧 DEBUG: registrationRoutes importado');
 
 console.log('🔧 DEBUG: Creando aplicación Express...');
 // Crear aplicación Express
@@ -111,6 +113,9 @@ app.use('/api/health', healthRoutes);
 
 // Rutas de autenticación (públicas)
 app.use('/api/auth', authRoutes);
+
+// Rutas de registro (públicas)
+app.use('/api/registration', registrationRoutes);
 
 // Rutas de prueba para demostrar firmas dinámicas
 app.use('/api/test', testRoutes);

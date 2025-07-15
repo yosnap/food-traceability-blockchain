@@ -161,11 +161,7 @@ export class FoodController {
             // Si no se especifica owner, usar el usuario actual
             const targetOwner = ownerAddress || req.user?.address;
 
-            const expiringProducts = await fabricGatewayService.getExpiringProducts(
-                daysAhead,
-                targetOwner,
-                category
-            );
+            const expiringProducts = await fabricGatewayService.getExpiringProducts(daysAhead);
 
             res.json({
                 success: true,
@@ -267,10 +263,14 @@ export class FoodController {
             const { consumedDate, rating, notes } = req.body;
 
             const result = await fabricGatewayService.markAsConsumed(
+                req.user?.userId || req.user?.address || 'consumer',
                 productId,
-                consumedDate,
-                rating ? parseInt(rating) : undefined,
-                notes
+                req.user?.address || 'unknown',
+                {
+                    consumedDate,
+                    rating: rating ? parseInt(rating) : undefined,
+                    feedback: notes
+                }
             );
 
             res.json({
@@ -341,7 +341,7 @@ export class FoodController {
             const { category } = req.params;
             
             // Usar getExpiringProducts con filtro de categoría y rango amplio
-            const products = await fabricGatewayService.getExpiringProducts(365, undefined, category);
+            const products = await fabricGatewayService.getExpiringProducts(365);
 
             res.json({
                 success: true,
@@ -377,9 +377,9 @@ export class FoodController {
             }
 
             // Obtener productos del usuario
-            const allProducts = await fabricGatewayService.getExpiringProducts(365, userAddress);
-            const expiringProducts = await fabricGatewayService.getExpiringProducts(7, userAddress);
-            const criticalProducts = await fabricGatewayService.getExpiringProducts(1, userAddress);
+            const allProducts = await fabricGatewayService.getExpiringProducts(365);
+            const expiringProducts = await fabricGatewayService.getExpiringProducts(7);
+            const criticalProducts = await fabricGatewayService.getExpiringProducts(1);
 
             // Calcular estadísticas
             const stats = {
